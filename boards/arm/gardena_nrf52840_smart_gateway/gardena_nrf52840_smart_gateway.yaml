@@ -1,5 +1,5 @@
-identifier: nrf52840_pca10056
-name: nRF52840-PCA10056
+identifier: gardena_nrf52840_smart_gateway
+name: Gardena nRF52840 smart Gateway
 type: mcu
 arch: arm
 toolchain:

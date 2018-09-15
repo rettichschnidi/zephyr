@@ -1,9 +1,9 @@
-# Kconfig - nRF52840 PCA10056 board configuration
+# Kconfig - Gardena nRF52840 Smart Gateway board configuration
 #
 # Copyright (c) 2016 Nordic Semiconductor ASA
 #
 # SPDX-License-Identifier: Apache-2.0
 
-config  BOARD_NRF52840_PCA10056
-	bool "NRF52840 PCA10056"
+config  BOARD_GARDENA_NRF52840_SMART_GATEWAY
+	bool "GARDENA NRF52840 SMART GATEWAY"
 	depends on SOC_NRF52840_QIAA
