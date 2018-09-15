@@ -1,6 +1,6 @@
 # Kconfig - Gardena nRF52840 Smart Gateway board configuration
 #
-# Copyright (c) 2016 Nordic Semiconductor ASA
+# Copyright (c) 2018, Reto Schneider <code@reto-schneider.ch>
 #
 # SPDX-License-Identifier: Apache-2.0
 
