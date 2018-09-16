@@ -47,36 +47,36 @@ config UART_PRECISION32_1_GPIO_LOC
 
 endif # UART_PRECISION32_1
 
-menuconfig USART_GECKO_0
+menuconfig USART_PRECISION32_0
 	bool "USART 0"
 	help
 	  Enable USART 0.
 
-if USART_GECKO_0
+if USART_PRECISION32_0
 
-config USART_GECKO_0_GPIO_LOC
+config USART_PRECISION32_0_GPIO_LOC
 	int "Pin Locations"
 	range 0 3
 	depends on UART_PRECISION32
 	help
 	  The GPIO pins to use.
 
-endif # USART_GECKO_0
+endif # USART_PRECISION32_0
 
-menuconfig USART_GECKO_1
+menuconfig USART_PRECISION32_1
 	bool "USART 1"
 	help
 	  Enable USART 1.
 
-if USART_GECKO_1
+if USART_PRECISION32_1
 
-config USART_GECKO_1_GPIO_LOC
+config USART_PRECISION32_1_GPIO_LOC
 	int "Pin Locations"
 	range 0 3
 	depends on UART_PRECISION32
 	help
 	  The GPIO pins to use.
 
-endif # USART_GECKO_1
+endif # USART_PRECISION32_1
 
 endif # UART_PRECISION32
