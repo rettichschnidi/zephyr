@@ -1,0 +1,31 @@
+# Kconfig - SIM3U MCU line
+#
+# Copyright (c) 2017 Christian Taedcke
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+choice
+prompt "SIMU3XX MCU Selection"
+depends on SOC_SERIES_SIM3U
+
+config SOC_SIM3U
+	bool "SOC_SIM3U"
+	select HAS_SILABS_PRECISION32
+
+endchoice
+
+if SOC_SERIES_SIM3U
+
+config SOC_PART_NUMBER_SIM3U167
+	bool
+
+config SOC_PART_NUMBER_PRECISION32_SIM3U
+	string
+	default "SIM3U167" if SOC_PART_NUMBER_SIM3U167
+	help
+	  This string holds the full part number of the SoC. It is a hidden option
+	  that you should not set directly. The part number selection choice defines
+	  the default value for this string.
+
+endif # SOC_SERIES_SIM3U

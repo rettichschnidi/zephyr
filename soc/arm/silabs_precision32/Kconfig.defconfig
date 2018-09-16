@@ -1,1 +1,1 @@
-source "soc/arm/silabs_exx32/*/Kconfig.defconfig.series"
+source "soc/arm/silabs_precision32/*/Kconfig.defconfig.series"

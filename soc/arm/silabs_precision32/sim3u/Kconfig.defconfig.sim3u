@@ -1,0 +1,22 @@
+# Kconfig - Silicon Labs SIM3U-STK3800 platform configuration options
+
+#
+# Copyright (c) 2017 Christian Taedcke
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+if SOC_SIM3U
+
+config SOC
+	string
+	default "sim3u"
+
+if SERIAL
+
+config UART_PRECISION32
+	def_bool y
+
+endif # SERIAL
+
+endif # SOC_SIM3U

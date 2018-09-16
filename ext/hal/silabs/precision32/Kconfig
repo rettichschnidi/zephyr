@@ -1,0 +1,11 @@
+# Kconfig - Precision32 SDK
+#
+# Copyright (c) 2018, Reto Schneider
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+config HAS_SILABS_PRECISION32
+	bool
+	select HAS_CMSIS
+	depends on SOC_FAMILY_PRECISION32
