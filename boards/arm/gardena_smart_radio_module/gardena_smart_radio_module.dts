@@ -5,11 +5,11 @@
  */
 
 /dts-v1/;
-#include <silabs/efm32wg990f256.dtsi>
+#include <silabs/sim3u167.dtsi>
 
 / {
-	model = "Silicon Labs EFM32WG STK3800 board";
-	compatible = "silabs,efm32wg_stk3800", "silabs,efm32wg";
+	model = "Gardena smart Radio Module";
+	compatible = "silabs,gardena_smart_radio_module", "silabs,sim3u";
 
 	chosen {
 		zephyr,console = &uart0;
