@@ -14,6 +14,6 @@ config BOARD_INIT_PRIORITY
 	depends on GPIO
 	help
 	  Board initialization priority. This must be bigger than
-	  GPIO_GECKO_COMMON_INIT_PRIORITY.
+	  GPIO_PRECISION32_COMMON_INIT_PRIORITY.
 
 endif # BOARD_GARDENA_SMART_RADIO_MODULE

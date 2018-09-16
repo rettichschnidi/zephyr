@@ -16,4 +16,4 @@ static int gardena_smart_radio_module_init(struct device *dev)
 }
 
 /* needs to be done after GPIO driver init */
-SYS_INIT(gardena_smart_radio_module_init, PRE_KERNEL_1, CONFIG_BOARD_INIT_PRIORITY);
+SYS_INIT(gardena_smart_radio_module_init, PRE_KERNEL_1, 0);

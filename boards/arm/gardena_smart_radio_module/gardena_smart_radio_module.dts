@@ -5,7 +5,7 @@
  */
 
 /dts-v1/;
-#include <silabs/sim3u167.dtsi>
+#include <silabs/sim3u.dtsi>
 
 / {
 	model = "Gardena smart Radio Module";

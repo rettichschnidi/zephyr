@@ -16,6 +16,6 @@ config NUM_IRQS
 	# must be >= the highest interrupt number used
 	default 53
 
-source "soc/arm/silabs_precision32/sim3u/Kconfig.defconfig.e*"
+source "soc/arm/silabs_precision32/sim3u/Kconfig.defconfig.sim3*"
 
 endif # SOC_SERIES_SIM3U
