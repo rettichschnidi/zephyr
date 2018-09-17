@@ -1,0 +1,78 @@
+# Kconfig.gecko - Precision32 GPIO configuration options
+#
+# Copyright (c) 2018 Reto Schneider <code@reto-schneider.ch>
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menuconfig GPIO_PRECISION32
+	bool "Precision32 GPIO driver"
+	depends on GPIO && HAS_SILABS_PRECISION32
+	help
+	  Enable the Precision32 gpio driver.
+
+if GPIO_PRECISION32
+
+config GPIO_PRECISION32_COMMON_NAME
+	string "Common driver name"
+	default "GPIO_COMMON"
+
+config GPIO_PRECISION32_COMMON_INIT_PRIORITY
+	int "Common initialization priority"
+	default 39
+
+config GPIO_PRECISION32_COMMON_PRI
+	int "Interrupt priority"
+	default 2
+
+config GPIO_PRECISION32_PORTBANK0
+	bool "Port Bank 1ank 0"
+	help
+	  Enable Port Bank 1ank 0.
+
+config GPIO_PRECISION32_PORTBANK0_NAME
+	string "Port Bank 1ank 0 driver name"
+	depends on GPIO_PRECISION32_PORTBANK0
+	default "GPIO_0"
+
+config GPIO_PRECISION32_PORTBANK1
+	bool "Port Bank 1"
+	help
+	  Enable Port Bank 1.
+
+config GPIO_PRECISION32_PORTBANK1_NAME
+	string "Port Bank 1 driver name"
+	depends on GPIO_PRECISION32_PORTBANK1
+	default "GPIO_1"
+
+config GPIO_PRECISION32_PORTBANK2
+	bool "Port Bank 2"
+	help
+	  Enable Port Bank 2.
+
+config GPIO_PRECISION32_PORTBANK2_NAME
+	string "Port Bank 2 driver name"
+	depends on GPIO_PRECISION32_PORTBANK2
+	default "GPIO_2"
+
+config GPIO_PRECISION32_PORTBANK3
+	bool "Port Bank 3"
+	help
+	  Enable Port Bank 3.
+
+config GPIO_PRECISION32_PORTBANK3_NAME
+	string "Port Bank 3 driver name"
+	depends on GPIO_PRECISION32_PORTBANK3
+	default "GPIO_3"
+
+config GPIO_PRECISION32_PORTBANK4
+	bool "Port Bank 4"
+	help
+	  Enable Port Bank 4.
+
+config GPIO_PRECISION32_PORTBANK4_NAME
+	string "Port Bank 4 driver name"
+	depends on GPIO_PRECISION32_PORTBANK4
+	default "GPIO_4"
+
+endif # GPIO_PRECISION32
