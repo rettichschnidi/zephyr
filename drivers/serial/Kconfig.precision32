@@ -10,8 +10,9 @@ menuconfig UART_PRECISION32
 	depends on HAS_SILABS_PRECISION32
 	depends on GPIO_PRECISION32
 	select SERIAL_HAS_DRIVER
+  select SERIAL_SUPPORT_INTERRUPT
 	help
-	  Enable the Precision32 uart driver.
+	  Enable the Precision32 UART driver.
 
 if UART_PRECISION32
 
