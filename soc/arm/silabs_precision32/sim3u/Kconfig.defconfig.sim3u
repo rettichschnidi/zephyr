@@ -12,6 +12,13 @@ config SOC
 	string
 	default "sim3u"
 
+if GPIO
+
+config GPIO_PRECISION32
+	def_bool y
+
+endif # GPIO
+
 if SERIAL
 
 config UART_PRECISION32

@@ -18,7 +18,7 @@
 	};
 
 	soc {
-		usart0: serial@40000000 { /* USART0 */
+		usart0: uart@40000000 { /* USART0 */
 			compatible = "silabs,sim3u167-usart";
 			reg = <0x40000000 0x74>;
 			interrupts = <27 0>;
@@ -26,7 +26,7 @@
 			label = "USART_0";
 		};
 
-		usart1: serial@40001000 { /* USART1 */
+		usart1: uart@40001000 { /* USART1 */
 			compatible = "silabs,sim3u167-usart";
 			reg = <0x40001000 0x74>;
 			interrupts = <28 0>;
@@ -34,7 +34,7 @@
 			label = "USART_1";
 		};
 
-		uart0: serial@40002000 { /* UART0 */
+		uart0: uart@40002000 { /* UART0 */
 			compatible = "silabs,sim3u167-uart";
 			reg = <0x40002000 0x74>;
 			interrupts = <46 0>;
@@ -42,7 +42,7 @@
 			label = "UART_0";
 		};
 
-		uart1: serial@40003000 { /* UART1 */
+		uart1: uart@40003000 { /* UART1 */
 			compatible = "silabs,sim3u167-uart";
 			reg = <0x40003000 0x74>;
 			interrupts = <47 0>;
