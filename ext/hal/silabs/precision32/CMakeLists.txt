@@ -6,6 +6,7 @@
 #
 
 zephyr_include_directories(
+  SI32_Modules
   sim3u1xx
   )
 
