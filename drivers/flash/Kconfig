@@ -66,4 +66,6 @@ source "drivers/flash/Kconfig.simulator"
 
 source "drivers/flash/Kconfig.rv32m1"
 
+source "drivers/flash/Kconfig.sim3"
+
 endif # FLASH
