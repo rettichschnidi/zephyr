@@ -117,7 +117,7 @@ Build the Zephyr kernel and application:
    :board: sim3u1xx_b_dk
    :goals: build
 
-Connect the SiM3U1xx-B-DK to your host computer using the USB port and an 
+Connect the SiM3U1xx-B-DK to your host computer using the USB port and an
 `J-Link`_ debug adaptor.
 
 .. zephyr-app-commands::
