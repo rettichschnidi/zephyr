@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef __INC_BOARD_H
-#define __INC_BOARD_H
+#ifndef INC_BOARD_H_
+#define INC_BOARD_H_
 
-#endif /* __INC_BOARD_H */
+#endif /* INC_BOARD_H_ */
