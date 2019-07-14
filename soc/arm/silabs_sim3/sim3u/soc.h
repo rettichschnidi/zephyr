@@ -10,8 +10,8 @@
  *
  */
 
-#ifndef _SOC__H_
-#define _SOC__H_
+#ifndef SOC_H_
+#define SOC_H_
 
 #include <misc/util.h>
 
@@ -29,4 +29,4 @@ extern "C" {
 }
 #endif
 
-#endif /* _SOC__H_ */
+#endif /* SOC_H_ */
