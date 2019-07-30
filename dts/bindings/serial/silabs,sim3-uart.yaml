@@ -1,27 +1,17 @@
 ---
 title: SIM3 UART
-version: 0.1
+compatible: "silabs,sim3-uart"
 
 description: >
     This binding gives a base representation of the SIM3 UART
 
-inherits:
-    !include uart.yaml
+include: uart-controller.yaml
 
 properties:
-    compatible:
-      constraint: "silabs,sim3-uart"
-
     reg:
-      type: array
-      description: mmio register space
-      generation: define
-      category: required
+      required: true
 
     interrupts:
-      type: compound
-      category: required
-      description: required interrupts
-      generation: define
+      required: true
 
 ...
