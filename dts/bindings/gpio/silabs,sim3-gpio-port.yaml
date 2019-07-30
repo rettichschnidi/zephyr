@@ -1,29 +1,25 @@
 ---
 title: SIM3 GPIO
-version: 0.1
+compatible: "silabs,sim3-gpio-port"
 
 description: >
     This is a representation of the SIM3 GPIO Port nodes
 
+include: [gpio-controller.yaml, base.yaml]
+
 properties:
     compatible:
-      type: string
-      category: required
+      required: true
       description: compatible strings
-      constraint: "silabs,sim3-gpio-port"
-      generation: define
 
     reg:
-      type: int
       description: mmio register space
-      generation: define
-      category: required
+      required: true
 
     label:
       type: string
-      category: required
+      required: true
       description: Human readable string describing the device (used by Zephyr for API name)
-      generation: define
 
 "#cells":
   - pin

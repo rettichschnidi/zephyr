@@ -86,7 +86,7 @@
 			gpio0: gpio@4002a0a0 {
 				compatible = "silabs,sim3-gpio-port";
 				reg = <0x4002a0a0 0x90>;
-				label = "GPIO_0";
+				label = "PBSTD0";
 				gpio-controller;
 				#gpio-cells = <2>;
 			};
@@ -94,7 +94,7 @@
 			gpio1: gpio@4002a140 {
 				compatible = "silabs,sim3-gpio-port";
 				reg = <0x4002a140 0x90>;
-				label = "GPIO_1";
+				label = "PBSTD1";
 				gpio-controller;
 				#gpio-cells = <2>;
 			};
@@ -102,7 +102,7 @@
 			gpio2: gpio@4002a1e0 {
 				compatible = "silabs,sim3-gpio-port";
 				reg = <0x4002a1e0 0x90>;
-				label = "GPIO_2";
+				label = "PBSTD2";
 				gpio-controller;
 				#gpio-cells = <2>;
 			};
@@ -110,7 +110,7 @@
 			gpio3: gpio@4002a320 {
 				compatible = "silabs,sim3-gpio-port";
 				reg = <0x4002a320 0x90>;
-				label = "GPIO_3";
+				label = "PBSTD3";
 				gpio-controller;
 				#gpio-cells = <2>;
 			};

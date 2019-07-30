@@ -8,7 +8,7 @@
 #include <silabs/sim3u167bgm.dtsi>
 
 / {
-	model = "Silicon Labs  SIM3U1XX-B-DKboard";
+	model = "Silicon Labs SIM3U1XX-B-DK board";
 	compatible = "silabs,sim3u1xx_b_dk", "silabs,sim3u";
 
 	chosen {
@@ -55,5 +55,5 @@
 
 &uart0 {
 	current-speed = <115200>;
-	status = "ok";
+	status = "okay";
 };

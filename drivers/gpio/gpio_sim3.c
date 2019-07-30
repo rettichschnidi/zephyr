@@ -155,7 +155,7 @@ static int gpio_sim3_manage_callback(struct device *dev,
 {
 	struct gpio_sim3_data *data = dev->driver_data;
 
-	_gpio_manage_callback(&data->callbacks, callback, set);
+	gpio_manage_callback(&data->callbacks, callback, set);
 
 	return 0;
 }
@@ -216,7 +216,7 @@ static void gpio_sim3_common_isr(void *arg)
 		enabled_int = int_status & port_data->pin_callback_enables;
 		int_status &= ~enabled_int;
 
-		_gpio_fire_callbacks(&port_data->callbacks, port_dev,
+		gpio_fire_callbacks(&port_data->callbacks, port_dev,
 				     enabled_int);
 		//need to change pmatch?
 	}
@@ -257,7 +257,8 @@ static int gpio_sim3_common_init(struct device *dev)
 {
 	gpio_sim3_common_data.count = 0;
 
-	IRQ_CONNECT(PMATCH0_IRQn, DT_SILABS_SIM3_GPIO_0_IRQ_PMATCH0_PRIORITY,
+	IRQ_CONNECT(PMATCH0_IRQn,
+		    DT_INST_0_SILABS_SIM3_GPIO_IRQ_PMATCH0_PRIORITY,
 		    gpio_sim3_common_isr, DEVICE_GET(gpio_sim3_common), 0);
 
 	irq_enable(PMATCH0_IRQn);
@@ -314,12 +315,12 @@ static int gpio_sim3_port1_init(struct device *dev)
 static int gpio_sim3_port2_init(struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port2_config = {
-	.gpio_base = (void*) DT_SILABS_SIM3_GPIO_PORT_2_BASE_ADDRESS,
+	.gpio_base = (void *) DT_INST_2_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
 };
 
 static struct gpio_sim3_data gpio_sim3_port2_data;
 
-DEVICE_AND_API_INIT(gpio_sim3_port2, DT_SILABS_SIM3_GPIO_PORT_2_LABEL,
+DEVICE_AND_API_INIT(gpio_sim3_port2, DT_INST_2_SILABS_SIM3_GPIO_PORT_LABEL,
 		    gpio_sim3_port2_init,
 		    &gpio_sim3_port2_data, &gpio_sim3_port2_config,
 		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
