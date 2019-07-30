@@ -155,7 +155,7 @@ static int gpio_sim3_manage_callback(struct device *dev,
 {
 	struct gpio_sim3_data *data = dev->driver_data;
 
-	_gpio_manage_callback(&data->callbacks, callback, set);
+	gpio_manage_callback(&data->callbacks, callback, set);
 
 	return 0;
 }
@@ -216,7 +216,7 @@ static void gpio_sim3_common_isr(void *arg)
 		enabled_int = int_status & port_data->pin_callback_enables;
 		int_status &= ~enabled_int;
 
-		_gpio_fire_callbacks(&port_data->callbacks, port_dev,
+		gpio_fire_callbacks(&port_data->callbacks, port_dev,
 				     enabled_int);
 		//need to change pmatch?
 	}

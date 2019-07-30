@@ -54,7 +54,7 @@ static int silabs_sim3u_init(struct device *arg)
 	/* disable watchdog reset source */
 	RSTSRC0->RESETEN_b.WDTREN = 0;
 
-	_ClearFaults();
+	z_clearfaults();
 
 	/* Initialize system clock */
 	clkInit();
