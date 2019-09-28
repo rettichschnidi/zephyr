@@ -11,9 +11,9 @@
 struct uart_sim3_config {
 	UART_Type *base;
 	u32_t baud_rate;
-    //struct soc_gpio_pin pin_rx;
-    //struct soc_gpio_pin pin_tx;
-    //unsigned int loc;
+	// struct soc_gpio_pin pin_rx;
+	// struct soc_gpio_pin pin_tx;
+	// unsigned int loc;
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	void (*irq_config_func)(struct device *dev);
 #endif
@@ -43,10 +43,9 @@ static void uart_sim3_poll_out(struct device *dev, unsigned char c)
 {
 	const struct uart_sim3_config *config = dev->config->config_info;
 
-	/* Wait for transmitter fifo to be empty */
+	/* Wait for transmitter fifo to be empty. */
 	while (config->base->FIFOCN_b.TCNT)
 		;
-
 
 	config->base->DATA.U8 = c;
 }
@@ -107,7 +106,7 @@ static void uart_sim3_irq_tx_enable(struct device *dev)
 {
 	const struct uart_sim3_config *config = dev->config->config_info;
 
-        /* Enable the transmit complete interrupt */
+	/* Enable the transmit complete interrupt */
 	config->base->CONTROL_SET = UART_CONTROL_TCPTIEN_Msk | UART_CONTROL_TDREQIEN_Msk;
 }
 
@@ -216,41 +215,41 @@ static void uart_sim3_isr(void *arg)
 
 static void uart_sim3_init_pins(struct device *dev)
 {
-    //const struct uart_sim3_config *config = dev->config->config_info;
-
 	CLKCTRL0->APBCLKG0_b.PLL0CEN = 1;
 	CLKCTRL0->APBCLKG0_b.PB0CEN = 1;
 
-	//PB1 is on XBAR 0
+	/* PB1 is on XBAR 0 */
 	PBCFG0->XBAR0H_b.XBAR0EN = 1;
 
-	//skip all on PB0
+	/* Skip all on PB0 */
 	PBSTD0->PBSKIPEN_SET = PBSTD_PBSKIPEN_PBSKIPEN_Msk;
 
-        //skip all on PB1
+	/* Skip all on PB1 */
 	PBSTD1->PBSKIPEN_SET = PBSTD_PBSKIPEN_PBSKIPEN_Msk;
 	
-	// PB1.12 RX CP210X
-	// PB1.13 TX CP210X
+	/* PB1.12 RX CP210X
+	 * PB1.13 TX CP210X
+	 */
 	PBSTD1->PBSKIPEN_CLR = (1U << 12) | (1U << 13);
 	
-	// PB1.14 CTS CP210X
-	// PB1.15 RTS CP210X
-	//do not use rts and cts for now
+	/* PB1.14 CTS CP210X
+	 * PB1.15 RTS CP210X
+	 * Do not use rts and cts for now.
+	 */
 
 	u8_t pin = 13;
-	//Configure PB1.13 as digital input
-	PBSTD1->PBOUTMD_CLR = (1U << pin); //recommended for input mode
-	PBSTD1->PB_SET      = (1U << pin); //recommended for input mode
-	PBSTD1->PBMDSEL_SET = (1U << pin); //set digital mode
+	/* Configure PB1.13 as digital input */
+	PBSTD1->PBOUTMD_CLR = (1U << pin); /* Recommended for input mode. */
+	PBSTD1->PB_SET      = (1U << pin); /* Recommended for input mode. */
+	PBSTD1->PBMDSEL_SET = (1U << pin); /* Set digital mode. */
 
 	pin = 12;
-	//Configure PB1.12 as digital output
-	//PBSTD_1->PB_CLR      = (1U << pin); //set to 0
-	PBSTD1->PBOUTMD_SET = (1U << pin); //push-pull
-	PBSTD1->PBMDSEL_SET = (1U << pin); //digital mode
+	/* Configure PB1.12 as digital output. */
+	// PBSTD_1->PB_CLR      = (1U << pin); /* Set to 0. */
+	PBSTD1->PBOUTMD_SET = (1U << pin); /* push-pull */
+	PBSTD1->PBMDSEL_SET = (1U << pin); /* digital mode */
 
-	//enable UART0EN in xbar0
+	/* Enable UART0EN in xbar0. */
 	PBCFG0->XBAR0H_SET = PBCFG_XBAR0H_UART0EN_Msk;
 }
 
@@ -271,24 +270,21 @@ static void uart_sim3_init_pins(struct device *dev)
 static int uart_sim3_init(struct device *dev)
 {
 	const struct uart_sim3_config *config = dev->config->config_info;
-	u16_t baud = CALC_BAUDRATE(config->baud_rate);
+	const u16_t baud = CALC_BAUDRATE(config->baud_rate);
 
 	/* The peripheral and gpio clock are already enabled from soc and gpio
-	 * driver
+	 * driver.
 	 */
 
 	/* Enable UART clock */
 	CLKCTRL0->APBCLKG0_b.UART1CEN = 1;
 	CLKCTRL0->APBCLKG0_b.UART0CEN = 1;
 
-
 	config->base->BAUDRATE_b.TBAUD = baud;
 	config->base->BAUDRATE_b.RBAUD = baud;
 
-	// 8n1 is reset value
+	/* 8n1 is reset value. */
 
-	
-	
 	/* Initialize UART pins */
 	uart_sim3_init_pins(dev);
 
@@ -331,7 +327,7 @@ static void uart_sim3_config_func_0(struct device *dev);
 
 static const struct uart_sim3_config uart_sim3_0_config = {
 	.base = (UART_Type *)DT_SILABS_SIM3_UART_UART_0_BASE_ADDRESS,
-	//.clock = cmuClock_UART0,
+	// .clock = cmuClock_UART0,
 	.baud_rate = DT_SILABS_SIM3_UART_UART_0_CURRENT_SPEED,
 	//.pin_rx = PIN_UART0_RXD,
 	//.pin_tx = PIN_UART0_TXD,
