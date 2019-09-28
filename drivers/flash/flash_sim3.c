@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019, Christian Taedcke
+ * Copyright (c) 2019, Reto Schneider
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,26 +12,42 @@
 #include <device.h>
 #include <flash.h>
 #include <soc.h>
+#include <irq.h>
+#include <stdbool.h>
 
 #define LOG_LEVEL CONFIG_FLASH_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(flash_sim3);
 
 struct flash_sim3_data {
-	struct k_sem mutex;
+	struct k_mutex mutex;
+	bool locked;
 };
 
 #define DEV_NAME(dev) ((dev)->config->name)
-#define DEV_DATA(dev) \
-	((struct flash_sim3_data *const)(dev)->driver_data)
+#define DEV_DATA(dev) ((struct flash_sim3_data *const)(dev)->driver_data)
+
+enum { FLASH_PAGE_SIZE = 1024 };
 
 static bool write_range_is_valid(off_t offset, u32_t size);
 static bool read_range_is_valid(off_t offset, u32_t size);
-static int erase_flash_block(off_t offset, size_t size);
+
+static void unlock_flash_multiple_op(void)
+{
+	FLASHCTRL0->KEY = 0xA5;
+	FLASHCTRL0->KEY = 0xF2;
+}
+
+static void lock_flash(void)
+{
+	FLASHCTRL0->KEY = 0x5A;
+}
 
 static int flash_sim3_read(struct device *dev, off_t offset, void *data,
-			    size_t size)
+			   size_t size)
 {
+	(void)dev;
+
 	if (!read_range_is_valid(offset, size)) {
 		return -EINVAL;
 	}
@@ -44,13 +61,10 @@ static int flash_sim3_read(struct device *dev, off_t offset, void *data,
 	return 0;
 }
 
-static int flash_sim3_write(struct device *dev, off_t offset,
-			     const void *data, size_t size)
+static int flash_sim3_write(struct device *dev, const off_t offset,
+			    const void *const data, const size_t size)
 {
 	struct flash_sim3_data *const dev_data = DEV_DATA(dev);
-	MSC_Status_TypeDef msc_ret;
-	void *address;
-	int ret = 0;
 
 	if (!write_range_is_valid(offset, size)) {
 		return -EINVAL;
@@ -60,30 +74,35 @@ static int flash_sim3_write(struct device *dev, off_t offset,
 		return 0;
 	}
 
-	k_sem_take(&dev_data->mutex, K_FOREVER);
+	const u8_t *write_base = (u8_t *)CONFIG_FLASH_BASE_ADDRESS + offset;
+	const u8_t *source_base = (const u8_t *)data;
 
-	address = (u8_t *)CONFIG_FLASH_BASE_ADDRESS + offset;
-	msc_ret = MSC_WriteWord(address, data, size);
-	if (msc_ret < 0) {
-		ret = -EIO;
+	k_mutex_lock(&dev_data->mutex, K_FOREVER);
+
+	FLASHCTRL0->CONFIG_b.ERASEEN = 0;
+	const int key = irq_lock();
+
+	unlock_flash_multiple_op();
+	for (off_t write_offset = 0; write_offset < size;
+	     write_offset += sizeof(u16_t)) {
+		FLASHCTRL0->WRADDR = (uint32_t)(write_base + write_offset);
+		FLASHCTRL0->WRDATA =
+			*(const u16_t *)(source_base + write_offset);
 	}
+	lock_flash();
+	irq_unlock(key);
 
-	k_sem_give(&dev_data->mutex);
+	k_mutex_unlock(&dev_data->mutex);
 
-	return ret;
+	return 0;
 }
 
 static int flash_sim3_erase(struct device *dev, off_t offset, size_t size)
 {
 	struct flash_sim3_data *const dev_data = DEV_DATA(dev);
-	int ret;
+	int irq_key;
 
-	if (!read_range_is_valid(offset, size)) {
-		return -EINVAL;
-	}
-
-	if ((offset % FLASH_PAGE_SIZE) != 0) {
-		LOG_ERR("offset %x: not on a page boundary", offset);
+	if (!write_range_is_valid(offset, size)) {
 		return -EINVAL;
 	}
 
@@ -96,43 +115,59 @@ static int flash_sim3_erase(struct device *dev, off_t offset, size_t size)
 		return 0;
 	}
 
-	k_sem_take(&dev_data->mutex, K_FOREVER);
+	k_mutex_lock(&dev_data->mutex, K_FOREVER);
 
-	ret = erase_flash_block(offset, size);
+	if (dev_data->locked) {
+		k_mutex_unlock(&dev_data->mutex);
+		return -EACCES;
+	}
 
-	k_sem_give(&dev_data->mutex);
+	/* Generic code for erasing multiple flash pages. Could be simplified
+	 * for single pages and would need to be adapted when running from RAM.
+	 */
+	FLASHCTRL0->CONFIG_b.ERASEEN = 1;
+	irq_key = irq_lock();
+	unlock_flash_multiple_op();
+	for (off_t erase_offset = 0; erase_offset < size;
+	     erase_offset += FLASH_PAGE_SIZE) {
+		FLASHCTRL0->WRADDR =
+			CONFIG_FLASH_BASE_ADDRESS + offset + erase_offset;
+		FLASHCTRL0->WRDATA = 42; /* Any value works here. */
+	}
+	lock_flash();
+	irq_unlock(irq_key);
 
-	return ret;
+	k_mutex_unlock(&dev_data->mutex);
+
+	return 0;
 }
 
 static int flash_sim3_write_protection(struct device *dev, bool enable)
 {
 	struct flash_sim3_data *const dev_data = DEV_DATA(dev);
 
-	k_sem_take(&dev_data->mutex, K_FOREVER);
+	k_mutex_lock(&dev_data->mutex, K_FOREVER);
 
-	if (enable) {
-		/* Lock the MSC module. */
-		MSC->LOCK = 0;
-	} else {
-		/* Unlock the MSC module. */
-		MSC->LOCK = MSC_UNLOCK_CODE;
-	}
+	/* The SiM3 requires a chain of commands (i.e. enabling erase before
+	 * unlocking the flash.
+	 * Therefore, all we do here is to allow other function to ensure
+	 * whether the write protection has been willingly disabled upfront.
+	 */
+	dev_data->locked = enable;
 
-	k_sem_give(&dev_data->mutex);
+	k_mutex_unlock(&dev_data->mutex);
 
 	return 0;
 }
 
 /* Note:
- * - A flash address to write to must be aligned to words.
- * - Number of bytes to write must be divisible by 4.
+ * - A flash address to write to must be aligned to half-words.
+ * - Number of bytes to write must be divisible by 2.
  */
 static bool write_range_is_valid(off_t offset, u32_t size)
 {
-	return read_range_is_valid(offset, size)
-		&& (offset % sizeof(u32_t) == 0)
-		&& (size % 4 == 0);
+	return read_range_is_valid(offset, size) &&
+	       (offset % sizeof(u16_t) == 0) && (size % 2 == 0);
 }
 
 static bool read_range_is_valid(off_t offset, u32_t size)
@@ -140,34 +175,20 @@ static bool read_range_is_valid(off_t offset, u32_t size)
 	return (offset + size) <= (CONFIG_FLASH_SIZE * 1024);
 }
 
-static int erase_flash_block(off_t offset, size_t size)
-{
-	MSC_Status_TypeDef msc_ret;
-	void *address;
-	int ret = 0;
-
-	for (off_t tmp = offset; tmp < offset + size; tmp += FLASH_PAGE_SIZE) {
-		address = (u8_t *)CONFIG_FLASH_BASE_ADDRESS + tmp;
-		msc_ret = MSC_ErasePage(address);
-		if (msc_ret < 0) {
-			ret = -EIO;
-			break;
-		}
-	}
-
-	return ret;
-}
-
 static int flash_sim3_init(struct device *dev)
 {
 	struct flash_sim3_data *const dev_data = DEV_DATA(dev);
 
-	k_sem_init(&dev_data->mutex, 1, 1);
+	k_mutex_init(&dev_data->mutex);
 
-	MSC_Init();
+	/* Ensure supply monitor is enabled. */
+	VMON0->CONTROL_b.VMONEN = VMON0_CONTROL_VMONEN_Enable;
 
-	/* Lock the MSC module. */
-	MSC->LOCK = 0;
+	/* Ensure supply monitor is configured as reset source. */
+	RSTSRC0->RESETFLAG_b.VMONRF = RSTSRC0_RESETEN_VMONREN_Enable;
+
+	/* Lock the flash. */
+	flash_sim3_write_protection(dev, true);
 
 	LOG_INF("Device %s initialized", DEV_NAME(dev));
 
@@ -182,11 +203,11 @@ static const struct flash_driver_api flash_sim3_driver_api = {
 	/* FLASH_WRITE_BLOCK_SIZE is extracted from device tree as flash node
 	 * property 'write-block-size'.
 	 */
-	.write_block_size = FLASH_WRITE_BLOCK_SIZE,
+	.write_block_size = DT_FLASH_WRITE_BLOCK_SIZE,
 };
 
 static struct flash_sim3_data flash_sim3_0_data;
 
-DEVICE_AND_API_INIT(flash_sim3_0, DT_FLASH_DEV_NAME,
-		    flash_sim3_init, &flash_sim3_0_data, NULL, POST_KERNEL,
+DEVICE_AND_API_INIT(flash_sim3_0, DT_FLASH_DEV_NAME, flash_sim3_init,
+		    &flash_sim3_0_data, NULL, POST_KERNEL,
 		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &flash_sim3_driver_api);
