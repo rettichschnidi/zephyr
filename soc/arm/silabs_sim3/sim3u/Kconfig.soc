@@ -10,4 +10,15 @@ if SOC_SERIES_SIM3U
 config SOC_PART_NUMBER_SIM3U167AGM
 	bool
 
+config SOC_SERIES_SIM3U_PREVENT_BRICKING
+	bool "Delay startup to allow debuggers to connect"
+	default y
+	help
+		If the reset pin was the source of the last reset, delay for 500 msec.
+		Firmware can disable the debug port by inadvertantly setting the AHB
+		clock source to a disabled clock. If this happens too quickly after a
+		reset, it is not possible for a debug agent to gain control and thus
+		not possible to reprogram the on-chip flash. Adding a delay here gives
+		a debug agent sufficient time to connect.
+
 endif # SOC_SERIES_SIM3U

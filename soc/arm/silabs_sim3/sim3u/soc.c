@@ -51,6 +51,39 @@ static int silabs_sim3u_init(struct device *arg)
 {
 	ARG_UNUSED(arg);
 
+#ifdef CONFIG_SOC_SERIES_SIM3U_PREVENT_BRICKING
+	/*
+	 * If the reset pin was the source of the last reset, delay startup for
+	 * 500 msec.
+	 * Firmware can disable the debug port by inadvertantly setting the AHB
+	 * clock source to a disabled clock. If this happens too quickly after a
+	 * reset, it is not possible for a debug agent to gain control and thus
+	 * not possible to reprogram the on-chip flash. Adding a delay here
+	 * gives a debug agent sufficient time to connect.
+	 */
+	if ((RSTSRC0->RESETFLAG_b.PORRF == 0) &&
+	    (RSTSRC0->RESETFLAG_b.VMONRF == 0) &&
+	    (RSTSRC0->RESETFLAG_b.PINRF == 1)) {
+		/*
+		 * Set the SysTick timer to count down 10M ticks @ 20MHz
+		 * (~500 msec)
+		 */
+		SysTick->LOAD = 0xA00000;
+		SysTick->VAL = 0;
+		SysTick->CTRL =
+			SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_ENABLE_Msk;
+
+		/* Wait for the count down to complete */
+		while (0 == (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk)) {
+		}
+
+		/* Set the SysTick timer to reset values */
+		SysTick->CTRL = 0;
+		SysTick->LOAD = 0;
+		SysTick->VAL = 0;
+	}
+#endif /* CONFIG_SOC_SERIES_SIM3U_PREVENT_BRICKING */
+
 	unsigned int oldLevel; /* Old interrupt lock level */
 
 	/* Disable interrupts */
