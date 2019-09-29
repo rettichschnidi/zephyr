@@ -16,11 +16,11 @@
 #include <arch/cpu.h>
 #include <cortex_m/exc.h>
 
-uint32_t SystemCoreClock = 20000000;
+uint32_t SystemCoreClock = CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC;
 
 uint32_t SystemCoreClockGet(void)
 {
-    return SystemCoreClock;
+	return SystemCoreClock;
 }
 
 /**
@@ -31,7 +31,12 @@ uint32_t SystemCoreClockGet(void)
  */
 static ALWAYS_INLINE void clkInit(void)
 {
+	/* Wait until oscillator is no longer busy. */
+	while (CLKCTRL0->CONTROL_b.OBUSYF) {
+	}
 
+//	// The following line bricked my dev-board!
+//	CLKCTRL0->CONTROL_b.AHBSEL = CLKCTRL0_CONTROL_AHBSEL_100;
 }
 
 /**
@@ -46,12 +51,12 @@ static int silabs_sim3u_init(struct device *arg)
 {
 	ARG_UNUSED(arg);
 
-	unsigned int oldLevel; /* old interrupt lock level */
+	unsigned int oldLevel; /* Old interrupt lock level */
 
-	/* disable interrupts */
+	/* Disable interrupts */
 	oldLevel = irq_lock();
 
-	/* disable watchdog reset source */
+	/* Disable watchdog reset source */
 	RSTSRC0->RESETEN_b.WDTREN = 0;
 
 	z_clearfaults();
@@ -60,12 +65,12 @@ static int silabs_sim3u_init(struct device *arg)
 	clkInit();
 
 	/*
-	 * install default handler that simply resets the CPU
-	 * if configured in the kernel, NOP otherwise
+	 * Install default handler that simply resets the CPU if configured in
+	 * the kernel, NOP otherwise.
 	 */
 	NMI_INIT();
 
-	/* restore interrupt state */
+	/* Restore interrupt state */
 	irq_unlock(oldLevel);
 	return 0;
 }
