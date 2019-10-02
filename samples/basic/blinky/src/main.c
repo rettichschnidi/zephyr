@@ -8,24 +8,30 @@
 #include <device.h>
 #include <drivers/gpio.h>
 
-#define LED_PORT	DT_ALIAS_LED0_GPIOS_CONTROLLER
-#define LED		DT_ALIAS_LED0_GPIOS_PIN
-
 /* 1000 msec = 1 sec */
 #define SLEEP_TIME	1000
 
 void main(void)
 {
 	u32_t cnt = 0;
-	struct device *dev;
+	struct device *led0;
+	struct device *led1;
+	struct device *led2;
 
-	dev = device_get_binding(LED_PORT);
+	led0 = device_get_binding(DT_ALIAS_LED0_GPIOS_CONTROLLER);
+	led1 = device_get_binding(DT_ALIAS_LED1_GPIOS_CONTROLLER);
+	led2 = device_get_binding(DT_ALIAS_LED2_GPIOS_CONTROLLER);
+
 	/* Set LED pin as output */
-	gpio_pin_configure(dev, LED, GPIO_DIR_OUT);
+	gpio_pin_configure(led0, DT_ALIAS_LED0_GPIOS_PIN, GPIO_DIR_OUT);
+	gpio_pin_configure(led1, DT_ALIAS_LED1_GPIOS_PIN, GPIO_DIR_OUT);
+	gpio_pin_configure(led2, DT_ALIAS_LED2_GPIOS_PIN, GPIO_DIR_OUT);
 
 	while (1) {
 		/* Set pin to HIGH/LOW every 1 second */
-		gpio_pin_write(dev, LED, cnt % 2);
+		gpio_pin_write(led0, DT_ALIAS_LED0_GPIOS_PIN, cnt % 2);
+		gpio_pin_write(led1, DT_ALIAS_LED1_GPIOS_PIN, cnt % 2);
+		gpio_pin_write(led2, DT_ALIAS_LED2_GPIOS_PIN, cnt % 2);
 		cnt++;
 		k_sleep(SLEEP_TIME);
 	}
