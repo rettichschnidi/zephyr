@@ -333,71 +333,46 @@ static int gpio_sim3_port2_init(struct device *dev)
 }
 #endif /* CONFIG_GPIO_SIM3_PORT2 */
 
-#ifdef CONFIG_GPIO_SIM3_PORTD
-static int gpio_sim3_portd_init(struct device *dev);
+#ifdef CONFIG_GPIO_SIM3_PORT3
+static int gpio_sim3_port3_init(struct device *dev);
 
-static const struct gpio_sim3_config gpio_sim3_portd_config = {
-	.gpio_base = &GPIO->P[gpioPortD],
-	.gpio_index = gpioPortD,
+static const struct gpio_sim3_config gpio_sim3_port3_config = {
+	.gpio_base = (void *) DT_INST_3_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
 };
 
-static struct gpio_sim3_data gpio_sim3_portd_data;
+static struct gpio_sim3_data gpio_sim3_port3_data;
 
-DEVICE_AND_API_INIT(gpio_sim3_portd, DT_GPIO_SIM3_PORTD_NAME,
-		    gpio_sim3_portd_init,
-		    &gpio_sim3_portd_data, &gpio_sim3_portd_config,
+DEVICE_AND_API_INIT(gpio_sim3_port3, DT_INST_3_SILABS_SIM3_GPIO_PORT_LABEL,
+		    gpio_sim3_port3_init,
+		    &gpio_sim3_port3_data, &gpio_sim3_port3_config,
 		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
 		    &gpio_sim3_driver_api);
 
-static int gpio_sim3_portd_init(struct device *dev)
+static int gpio_sim3_port3_init(struct device *dev)
 {
 	gpio_sim3_add_port(&gpio_sim3_common_data, dev);
 	return 0;
 }
-#endif /* CONFIG_GPIO_SIM3_PORTD */
+#endif /* CONFIG_GPIO_SIM3_PORT3 */
 
-#ifdef CONFIG_GPIO_SIM3_PORTE
-static int gpio_sim3_porte_init(struct device *dev);
+#ifdef CONFIG_GPIO_SIM3_PORT4
+static int gpio_sim3_port4_init(struct device *dev);
 
-static const struct gpio_sim3_config gpio_sim3_porte_config = {
-	.gpio_base = &GPIO->P[gpioPortE],
-	.gpio_index = gpioPortE,
+static const struct gpio_sim3_config gpio_sim3_port4_config = {
+	.gpio_base = (void *) DT_INST_4_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
 };
 
-static struct gpio_sim3_data gpio_sim3_porte_data;
+static struct gpio_sim3_data gpio_sim3_port4_data;
 
-DEVICE_AND_API_INIT(gpio_sim3_porte, DT_GPIO_SIM3_PORTE_NAME,
-		    gpio_sim3_porte_init,
-		    &gpio_sim3_porte_data, &gpio_sim3_porte_config,
+DEVICE_AND_API_INIT(gpio_sim3_port4, DT_INST_4_SILABS_SIM3_GPIO_PORT_LABEL,
+		    gpio_sim3_port4_init,
+		    &gpio_sim3_port4_data, &gpio_sim3_port4_config,
 		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
 		    &gpio_sim3_driver_api);
 
-static int gpio_sim3_porte_init(struct device *dev)
+static int gpio_sim3_port4_init(struct device *dev)
 {
 	gpio_sim3_add_port(&gpio_sim3_common_data, dev);
 	return 0;
 }
-#endif /* CONFIG_GPIO_SIM3_PORTE */
-
-#ifdef CONFIG_GPIO_SIM3_PORTF
-static int gpio_sim3_portf_init(struct device *dev);
-
-static const struct gpio_sim3_config gpio_sim3_portf_config = {
-	.gpio_base = &GPIO->P[gpioPortF],
-	.gpio_index = gpioPortF,
-};
-
-static struct gpio_sim3_data gpio_sim3_portf_data;
-
-DEVICE_AND_API_INIT(gpio_sim3_portf, DT_GPIO_SIM3_PORTF_NAME,
-		    gpio_sim3_portf_init,
-		    &gpio_sim3_portf_data, &gpio_sim3_portf_config,
-		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-		    &gpio_sim3_driver_api);
-
-static int gpio_sim3_portf_init(struct device *dev)
-{
-	gpio_sim3_add_port(&gpio_sim3_common_data, dev);
-	return 0;
-}
-#endif /* CONFIG_GPIO_SIM3_PORTF */
+#endif /* CONFIG_GPIO_SIM3_PORT4 */
