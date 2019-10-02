@@ -1,0 +1,58 @@
+/*
+ * Copyright (c) 2019 Reto Schneider
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <silabs/sim3u167bgm.dtsi>
+
+/ {
+	model = "SGRMT1 board";
+	compatible = "GARDENA, SGRMT1", "silabs,sim3u";
+
+	chosen {
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+
+	/* These aliases are provided for compatibility with samples */
+	aliases {
+		led0 = &led0;
+		led1 = &led1;
+		led2 = &led2;
+		sw0 = &button0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led0: led_0 {
+			gpios = <&gpio4 3 0>;
+			label = "LED1 green";
+		};
+		led1: led_1 {
+			gpios = <&gpio4 2 0>;
+			label = "LED1 red";
+		};
+		led2: led_2 {
+			gpios = <&gpio2 1 0>;
+			label = "System LED";
+		};
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		button0: button_0 {
+			/* gpio flags need validation */
+			gpios = <&gpio2 0 GPIO_INT_ACTIVE_LOW>;
+			label = "Button sysreset";
+		};
+	};
+};
+
+&uart0 {
+	current-speed = <115200>;
+	status = "okay";
+};
