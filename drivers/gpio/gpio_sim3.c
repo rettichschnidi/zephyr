@@ -10,14 +10,18 @@
 
 #include "gpio_utils.h"
 
+#define NUMBER_OF_PORTS 5
 
-#define NUMBER_OF_PORTS 5U
+#if defined(CONFIG_GPIO_SIM3_PORT0) || defined(CONFIG_GPIO_SIM3_PORT1) ||      \
+	defined(CONFIG_GPIO_SIM3_PORT2) || defined(CONFIG_GPIO_SIM3_PORT3)
+#define CONFIG_GPIO_SIM3_PBSTD 1
+#endif
 
 struct gpio_sim3_common_config {
 };
 
 struct gpio_sim3_common_data {
-	/* a list of all ports */
+	/* A list of all ports */
 	struct device *ports[NUMBER_OF_PORTS];
 	size_t count;
 };
@@ -35,23 +39,20 @@ struct gpio_sim3_data {
 };
 
 static inline void gpio_sim3_add_port(struct gpio_sim3_common_data *data,
-				       struct device *dev)
+				      struct device *dev)
 {
 	__ASSERT(dev, "No port device!");
 	data->ports[data->count++] = dev;
 }
 
-
-static int gpio_sim3_configure(struct device *dev,
-				int access_op, u32_t pin, int flags)
+static int gpio_sim3_configure(struct device *dev, int access_op, u32_t pin,
+			       int flags)
 {
-	const struct gpio_sim3_config *config = dev->config->config_info;
-	PBSTD_Type *gpio_base = config->gpio_base;
+	/* Enable APB clock to the PPL0 registers. */
 	CLKCTRL0->APBCLKG0_b.PLL0CEN = 1;
-	CLKCTRL0->APBCLKG0_b.PB0CEN = 1;
 
-	PBCFG0->XBAR1_b.XBAR1EN = 1;
-	PBCFG0->XBAR0H_b.XBAR0EN = 1;
+	/* Enable APB clock to the port bank modules. */
+	CLKCTRL0->APBCLKG0_b.PB0CEN = 1;
 
 	/* Check for an invalid pin configuration */
 	if ((flags & GPIO_INT) && (flags & GPIO_DIR_OUT)) {
@@ -70,43 +71,15 @@ static int gpio_sim3_configure(struct device *dev,
 
 	/* Configuring a complete port is not implemented */
 	if (access_op != GPIO_ACCESS_BY_PIN) {
-	    return -ENOTSUP;
+		return -ENOTSUP;
 	}
 
-	if ((flags & GPIO_DIR_MASK) == GPIO_DIR_IN) {
-	    // set the pins masked with 1's to open-drain input.
-	    gpio_base->PBOUTMD_CLR = (1U << pin); //recommended for input mode
-	    gpio_base->PB_SET      = (1U << pin); //recommended for input mode
-	    gpio_base->PBMDSEL_SET = (1U << pin); //set digital mode
-		if ((flags & GPIO_PUD_MASK) == GPIO_PUD_PULL_UP) {
-		    //only available for complete port
-		    gpio_base->PBDRV_b.PBPUEN = 1;
-		} else if ((flags & GPIO_PUD_MASK) == GPIO_PUD_PULL_DOWN) {
-		    //pull down not available by hardware
-		    return -ENOTSUP;
-		} else {
-		    //only available for complete port
-		    gpio_base->PBDRV_b.PBPUEN = 0;
-		}
-	} else { /* GPIO_DIR_OUT */
-	    gpio_base->PB_CLR      = (1U << pin); //set to 0
-	    gpio_base->PBOUTMD_SET = (1U << pin); //push-pull
-	    gpio_base->PBMDSEL_SET = (1U << pin); //digital mode
-	}
-
-	if (flags & GPIO_INT) {
-	    if (flags & GPIO_INT_ACTIVE_HIGH) {
-		gpio_base->PM_SET = (1U << pin);
-	    } else {
-		gpio_base->PM_CLR = (1U << pin);
-	    }
-	}
-	    
 	return 0;
 }
 
-static int gpio_sim3_write(struct device *dev,
-			    int access_op, u32_t pin, u32_t value)
+#ifdef CONFIG_GPIO_SIM3_PBSTD
+static int gpio_sim3_pbstd_write(struct device *dev, int access_op, u32_t pin,
+				 u32_t value)
 {
 	const struct gpio_sim3_config *config = dev->config->config_info;
 	PBSTD_Type *gpio_base = config->gpio_base;
@@ -117,13 +90,13 @@ static int gpio_sim3_write(struct device *dev,
 			 * Writing zeros to the other bits leaves the data
 			 * output unchanged for the other pins.
 			 */
-		        gpio_base->PB_SET      = BIT(pin);
+			gpio_base->PB_SET = BIT(pin);
 		} else {
 			/* Clear the data output for the corresponding pin.
 			 * Writing zeros to the other bits leaves the data
 			 * output unchanged for the other pins.
 			 */
-		        gpio_base->PB_CLR      = BIT(pin);
+			gpio_base->PB_CLR = BIT(pin);
 		}
 	} else { /* GPIO_ACCESS_BY_PORT */
 		/* Write the data output for all the pins */
@@ -133,8 +106,8 @@ static int gpio_sim3_write(struct device *dev,
 	return 0;
 }
 
-static int gpio_sim3_read(struct device *dev,
-			   int access_op, u32_t pin, u32_t *value)
+static int gpio_sim3_pbstd_read(struct device *dev, int access_op, u32_t pin,
+				u32_t *value)
 {
 	const struct gpio_sim3_config *config = dev->config->config_info;
 	PBSTD_Type *gpio_base = config->gpio_base;
@@ -150,8 +123,66 @@ static int gpio_sim3_read(struct device *dev,
 	return 0;
 }
 
-static int gpio_sim3_manage_callback(struct device *dev,
-				      struct gpio_callback *callback, bool set)
+static inline int gpio_sim3_pbstd_configure(struct device *dev, int access_op,
+					    u32_t pin, int flags)
+{
+	const struct gpio_sim3_config *config = dev->config->config_info;
+	PBSTD_Type *gpio_base = config->gpio_base;
+	const int common = gpio_sim3_configure(dev, access_op, pin, flags);
+
+	if (common < 0) {
+		return common;
+	}
+
+#if defined(CONFIG_GPIO_SIM3_PORT0) || defined(CONFIG_GPIO_SIM3_PORT1)
+	if (gpio_base == PBSTD0 || gpio_base == PBSTD1) {
+		/* Enable crossbars 0 for PB0 and PB1. */
+		PBCFG0->XBAR0H_b.XBAR0EN = 1;
+	}
+#endif
+
+#if defined(CONFIG_GPIO_SIM3_PORT2) || defined(CONFIG_GPIO_SIM3_PORT3)
+	if (gpio_base == PBSTD2 || gpio_base == PBSTD3) {
+		/* Enable crossbars 1 for PB2 and PB3. */
+		PBCFG0->XBAR1_b.XBAR1EN = 1;
+	}
+#endif
+
+	if ((flags & GPIO_DIR_MASK) == GPIO_DIR_IN) {
+		/* Set the pins masked with 1's to open-drain input. */
+		gpio_base->PBOUTMD_CLR = (1U << pin);
+		gpio_base->PB_SET = (1U << pin);
+		gpio_base->PBMDSEL_SET = (1U << pin);
+		if ((flags & GPIO_PUD_MASK) == GPIO_PUD_PULL_UP) {
+			/* Only available for complete port */
+			gpio_base->PBDRV_b.PBPUEN = 1;
+		} else if ((flags & GPIO_PUD_MASK) == GPIO_PUD_PULL_DOWN) {
+			/* Pull down not available by hardware */
+			return -ENOTSUP;
+		}
+
+		/* Only available for complete port */
+		gpio_base->PBDRV_b.PBPUEN = 0;
+	} else { /* GPIO_DIR_OUT */
+		gpio_base->PB_CLR = (1U << pin); /* Set to 0 */
+		gpio_base->PBOUTMD_SET = (1U << pin); /* push-pull */
+		gpio_base->PBMDSEL_SET = (1U << pin); /* digital mode */
+	}
+
+	if (flags & GPIO_INT) {
+		if (flags & GPIO_INT_ACTIVE_HIGH) {
+			gpio_base->PM_SET = (1U << pin);
+		} else {
+			gpio_base->PM_CLR = (1U << pin);
+		}
+	}
+
+	return 0;
+}
+
+static int gpio_sim3_pbstd_manage_callback(struct device *dev,
+					   struct gpio_callback *callback,
+					   bool set)
 {
 	struct gpio_sim3_data *data = dev->driver_data;
 
@@ -160,25 +191,25 @@ static int gpio_sim3_manage_callback(struct device *dev,
 	return 0;
 }
 
-static int gpio_sim3_enable_callback(struct device *dev,
-				      int access_op, u32_t pin)
+static int gpio_sim3_pbstd_enable_callback(struct device *dev, int access_op,
+					   u32_t pin)
 {
 	struct gpio_sim3_data *data = dev->driver_data;
 	const struct gpio_sim3_config *config = dev->config->config_info;
 	PBSTD_Type *gpio_base = config->gpio_base;
-	
+
 	if (access_op == GPIO_ACCESS_BY_PORT) {
 		return -ENOTSUP;
 	}
 
 	data->pin_callback_enables |= BIT(pin);
-	gpio_base->PMEN_SET = (1U << pin); //enable pmatch for this pin
+	gpio_base->PMEN_SET = (1U << pin); /* Enable pmatch for this pin */
 
 	return 0;
 }
 
-static int gpio_sim3_disable_callback(struct device *dev,
-				       int access_op, u32_t pin)
+static int gpio_sim3_pbstd_disable_callback(struct device *dev, int access_op,
+					    u32_t pin)
 {
 	struct gpio_sim3_data *data = dev->driver_data;
 	const struct gpio_sim3_config *config = dev->config->config_info;
@@ -217,40 +248,38 @@ static void gpio_sim3_common_isr(void *arg)
 		int_status &= ~enabled_int;
 
 		gpio_fire_callbacks(&port_data->callbacks, port_dev,
-				     enabled_int);
+				    enabled_int);
 		//need to change pmatch?
 	}
 	//need to clear pending int?
 }
 
-
-static const struct gpio_driver_api gpio_sim3_driver_api = {
-	.config = gpio_sim3_configure,
-	.write = gpio_sim3_write,
-	.read = gpio_sim3_read,
-	.manage_callback = gpio_sim3_manage_callback,
-	.enable_callback = gpio_sim3_enable_callback,
-	.disable_callback = gpio_sim3_disable_callback,
+static const struct gpio_driver_api gpio_sim3_pbstd_driver_api = {
+	.config = gpio_sim3_pbstd_configure,
+	.write = gpio_sim3_pbstd_write,
+	.read = gpio_sim3_pbstd_read,
+	.manage_callback = gpio_sim3_pbstd_manage_callback,
+	.enable_callback = gpio_sim3_pbstd_enable_callback,
+	.disable_callback = gpio_sim3_pbstd_disable_callback,
 };
 
 static const struct gpio_driver_api gpio_sim3_common_driver_api = {
-	.manage_callback = gpio_sim3_manage_callback,
-	.enable_callback = gpio_sim3_enable_callback,
-	.disable_callback = gpio_sim3_disable_callback,
+	.manage_callback = gpio_sim3_pbstd_manage_callback,
+	.enable_callback = gpio_sim3_pbstd_enable_callback,
+	.disable_callback = gpio_sim3_pbstd_disable_callback,
 };
 
 #ifdef CONFIG_GPIO_SIM3
 static int gpio_sim3_common_init(struct device *dev);
 
-static const struct gpio_sim3_common_config gpio_sim3_common_config = {
-};
+static const struct gpio_sim3_common_config gpio_sim3_common_config = {};
 
 static struct gpio_sim3_common_data gpio_sim3_common_data;
 
 DEVICE_AND_API_INIT(gpio_sim3_common, DT_GPIO_SIM3_COMMON_NAME,
-		    gpio_sim3_common_init,
-		    &gpio_sim3_common_data, &gpio_sim3_common_config,
-		    POST_KERNEL, CONFIG_GPIO_SIM3_COMMON_INIT_PRIORITY,
+		    gpio_sim3_common_init, &gpio_sim3_common_data,
+		    &gpio_sim3_common_config, POST_KERNEL,
+		    CONFIG_GPIO_SIM3_COMMON_INIT_PRIORITY,
 		    &gpio_sim3_common_driver_api);
 
 static int gpio_sim3_common_init(struct device *dev)
@@ -266,21 +295,20 @@ static int gpio_sim3_common_init(struct device *dev)
 }
 #endif /* CONFIG_GPIO_SIM3 */
 
-
 #ifdef CONFIG_GPIO_SIM3_PORT0
 static int gpio_sim3_port0_init(struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port0_config = {
-	.gpio_base = (void *) DT_INST_0_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
+	.gpio_base = (void *)DT_INST_0_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
 };
 
 static struct gpio_sim3_data gpio_sim3_port0_data;
 
 DEVICE_AND_API_INIT(gpio_sim3_port0, DT_INST_0_SILABS_SIM3_GPIO_PORT_LABEL,
-		    gpio_sim3_port0_init,
-		    &gpio_sim3_port0_data, &gpio_sim3_port0_config,
-		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-		    &gpio_sim3_driver_api);
+		    gpio_sim3_port0_init, &gpio_sim3_port0_data,
+		    &gpio_sim3_port0_config, POST_KERNEL,
+		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		    &gpio_sim3_pbstd_driver_api);
 
 static int gpio_sim3_port0_init(struct device *dev)
 {
@@ -293,16 +321,16 @@ static int gpio_sim3_port0_init(struct device *dev)
 static int gpio_sim3_port1_init(struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port1_config = {
-	.gpio_base = (void *) DT_INST_1_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
+	.gpio_base = (void *)DT_INST_1_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
 };
 
 static struct gpio_sim3_data gpio_sim3_port1_data;
 
 DEVICE_AND_API_INIT(gpio_sim3_port1, DT_INST_1_SILABS_SIM3_GPIO_PORT_LABEL,
-		    gpio_sim3_port1_init,
-		    &gpio_sim3_port1_data, &gpio_sim3_port1_config,
-		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-		    &gpio_sim3_driver_api);
+		    gpio_sim3_port1_init, &gpio_sim3_port1_data,
+		    &gpio_sim3_port1_config, POST_KERNEL,
+		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		    &gpio_sim3_pbstd_driver_api);
 
 static int gpio_sim3_port1_init(struct device *dev)
 {
@@ -315,16 +343,16 @@ static int gpio_sim3_port1_init(struct device *dev)
 static int gpio_sim3_port2_init(struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port2_config = {
-	.gpio_base = (void *) DT_INST_2_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
+	.gpio_base = (void *)DT_INST_2_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
 };
 
 static struct gpio_sim3_data gpio_sim3_port2_data;
 
 DEVICE_AND_API_INIT(gpio_sim3_port2, DT_INST_2_SILABS_SIM3_GPIO_PORT_LABEL,
-		    gpio_sim3_port2_init,
-		    &gpio_sim3_port2_data, &gpio_sim3_port2_config,
-		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-		    &gpio_sim3_driver_api);
+		    gpio_sim3_port2_init, &gpio_sim3_port2_data,
+		    &gpio_sim3_port2_config, POST_KERNEL,
+		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		    &gpio_sim3_pbstd_driver_api);
 
 static int gpio_sim3_port2_init(struct device *dev)
 {
@@ -337,16 +365,16 @@ static int gpio_sim3_port2_init(struct device *dev)
 static int gpio_sim3_port3_init(struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port3_config = {
-	.gpio_base = (void *) DT_INST_3_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
+	.gpio_base = (void *)DT_INST_3_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
 };
 
 static struct gpio_sim3_data gpio_sim3_port3_data;
 
 DEVICE_AND_API_INIT(gpio_sim3_port3, DT_INST_3_SILABS_SIM3_GPIO_PORT_LABEL,
-		    gpio_sim3_port3_init,
-		    &gpio_sim3_port3_data, &gpio_sim3_port3_config,
-		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-		    &gpio_sim3_driver_api);
+		    gpio_sim3_port3_init, &gpio_sim3_port3_data,
+		    &gpio_sim3_port3_config, POST_KERNEL,
+		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		    &gpio_sim3_pbstd_driver_api);
 
 static int gpio_sim3_port3_init(struct device *dev)
 {
@@ -355,20 +383,116 @@ static int gpio_sim3_port3_init(struct device *dev)
 }
 #endif /* CONFIG_GPIO_SIM3_PORT3 */
 
+#endif /* CONFIG_GPIO_SIM3_PBSTD */
+
 #ifdef CONFIG_GPIO_SIM3_PORT4
+static int gpio_sim3_pbhd_write(struct device *dev, int access_op, u32_t pin,
+				u32_t value)
+{
+	const struct gpio_sim3_config *config = dev->config->config_info;
+	PBHD_Type *gpio_base = config->gpio_base;
+
+	if (access_op == GPIO_ACCESS_BY_PIN) {
+		if (value) {
+			/* Set the data output for the corresponding pin.
+			 * Writing zeros to the other bits leaves the data
+			 * output unchanged for the other pins.
+			 */
+			gpio_base->PB_SET = BIT(pin);
+		} else {
+			/* Clear the data output for the corresponding pin.
+			 * Writing zeros to the other bits leaves the data
+			 * output unchanged for the other pins.
+			 */
+			gpio_base->PB_CLR = BIT(pin);
+		}
+	} else { /* GPIO_ACCESS_BY_PORT */
+		/* Write the data output for all the pins */
+		gpio_base->PB_b.PB = value;
+	}
+
+	return 0;
+}
+
+static int gpio_sim3_pbhd_read(struct device *dev, int access_op, u32_t pin,
+			       u32_t *value)
+{
+	const struct gpio_sim3_config *config = dev->config->config_info;
+	PBHD_Type *gpio_base = config->gpio_base;
+
+	*value = gpio_base->PBPIN_b.PBPIN;
+
+	if (access_op == GPIO_ACCESS_BY_PIN) {
+		*value = (*value & BIT(pin)) >> pin;
+	}
+
+	/* nothing more to do for GPIO_ACCESS_BY_PORT */
+
+	return 0;
+}
+
+static inline int gpio_sim3_pbhd_configure(struct device *dev, int access_op,
+					   u32_t pin, int flags)
+{
+	const struct gpio_sim3_config *config = dev->config->config_info;
+	PBHD_Type *gpio_base = config->gpio_base;
+	const int common = gpio_sim3_configure(dev, access_op, pin, flags);
+
+	if (common < 0) {
+		return common;
+	}
+
+	if ((flags & GPIO_DIR_MASK) == GPIO_DIR_IN) {
+		return -ENOTSUP;
+	}
+
+	gpio_base->PB_CLR = (1U << pin); /* Set to 0 */
+	gpio_base->PBMDSEL_SET = (1U << pin); /* digital mode */
+
+	/* Configure pin as GPIO (reset value) */
+	switch (pin) {
+	case 0:
+		gpio_base->PBFSEL_b.PB0SEL = PBHD4_PBFSEL_PB0SEL_00;
+		break;
+	case 1:
+		gpio_base->PBFSEL_b.PB1SEL = PBHD4_PBFSEL_PB1SEL_00;
+		break;
+	case 2:
+		gpio_base->PBFSEL_b.PB2SEL = PBHD4_PBFSEL_PB2SEL_00;
+		break;
+	case 3:
+		gpio_base->PBFSEL_b.PB3SEL = PBHD4_PBFSEL_PB3SEL_00;
+		break;
+	case 4:
+		gpio_base->PBFSEL_b.PB4SEL = PBHD4_PBFSEL_PB4SEL_00;
+		break;
+	case 5:
+		gpio_base->PBFSEL_b.PB5SEL = PBHD4_PBFSEL_PB5SEL_000;
+		break;
+	}
+
+	return 0;
+}
+
+static const struct gpio_driver_api gpio_sim3_pbhd_driver_api = {
+	.config = gpio_sim3_pbhd_configure,
+	.write = gpio_sim3_pbhd_write,
+	.read = gpio_sim3_pbhd_read
+};
+
 static int gpio_sim3_port4_init(struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port4_config = {
-	.gpio_base = (void *) DT_INST_4_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
+	.gpio_base = (void *)DT_INST_4_SILABS_SIM3_GPIO_PORT_BASE_ADDRESS,
 };
 
 static struct gpio_sim3_data gpio_sim3_port4_data;
 
 DEVICE_AND_API_INIT(gpio_sim3_port4, DT_INST_4_SILABS_SIM3_GPIO_PORT_LABEL,
-		    gpio_sim3_port4_init,
-		    &gpio_sim3_port4_data, &gpio_sim3_port4_config,
-		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-		    &gpio_sim3_driver_api);
+		    gpio_sim3_port4_init, &gpio_sim3_port4_data,
+		    &gpio_sim3_port4_config, POST_KERNEL,
+		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		    &gpio_sim3_pbhd_driver_api);
 
 static int gpio_sim3_port4_init(struct device *dev)
 {
