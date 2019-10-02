@@ -118,7 +118,7 @@
 			gpio4: gpio@4002a3c0 {
 				compatible = "silabs,sim3-gpio-port";
 				reg = <0x4002a3c0 0x90>;
-				label = "GPIO_4";
+				label = "PBHD4";
 				gpio-controller;
 				#gpio-cells = <2>;
 			};
