@@ -1,0 +1,11 @@
+# Kconfig - GARDENA SGRMT1 board
+#
+# Copyright (c) 2019 Reto Schneider
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+config BOARD_GARDENA_SGRMT1
+	bool "GARDENA SGRMT1"
+	depends on SOC_SERIES_SIM3U
+	select SOC_PART_NUMBER_SIM3U167_A_GM
