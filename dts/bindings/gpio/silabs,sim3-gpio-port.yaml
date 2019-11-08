@@ -21,7 +21,7 @@ properties:
       required: true
       description: Human readable string describing the device (used by Zephyr for API name)
 
-"#cells":
+gpio-cells:
   - pin
   - flags
 ...
