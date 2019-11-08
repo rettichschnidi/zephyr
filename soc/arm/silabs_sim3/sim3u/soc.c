@@ -14,7 +14,7 @@
 #include <soc.h>
 
 #include <arch/cpu.h>
-#include <cortex_m/exc.h>
+#include <arch/arm/cortex_m/cmsis.h>
 
 uint32_t SystemCoreClock = CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC;
 
@@ -91,8 +91,6 @@ static int silabs_sim3u_init(struct device *arg)
 
 	/* Disable watchdog reset source */
 	RSTSRC0->RESETEN_b.WDTREN = 0;
-
-	z_clearfaults();
 
 	/* Initialize system clock */
 	clkInit();
