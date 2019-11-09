@@ -6,7 +6,7 @@
 
 /**
  * @file
- * @brief Board configuration macros for the efm32wg soc
+ * @brief Board configuration macros for the SiM3U soc
  *
  */
 

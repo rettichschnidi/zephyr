@@ -70,6 +70,11 @@ void main(void)
 				 (GPIO_DIR_IN | GPIO_INT |
 				  GPIO_INT_EDGE | GPIO_INT_ACTIVE_HIGH |
 				  GPIO_INT_DEBOUNCE | GPIO_PUD_PULL_UP));
+#elif defined(CONFIG_SOC_SERIES_SIM3U)
+	ret = gpio_pin_configure(gpio_in_dev, GPIO_INT_PIN,
+				 (GPIO_DIR_IN | GPIO_INT |
+				  GPIO_INT_ACTIVE_HIGH |
+				  GPIO_INT_DEBOUNCE));
 #else
 	ret = gpio_pin_configure(gpio_in_dev, GPIO_INT_PIN,
 				 (GPIO_DIR_IN | GPIO_INT |

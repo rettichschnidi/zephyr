@@ -6,41 +6,65 @@
 #
 
 menuconfig GPIO_SIM3
-	bool "Sim3 GPIO driver"
+	bool "SiM3 GPIO driver"
 	depends on GPIO && SOC_FAMILY_SIM3
 	select HAS_DTS_GPIO
 	help
-	  Enable the Gecko gpio driver.
+	  Enable the SiM3 gpio driver.
 
 if GPIO_SIM3
 
-config GPIO_SIM3_COMMON_INIT_PRIORITY
+config GPIO_SIM3_PBSTD_COMMON_INIT_PRIORITY
 	int "Common initialization priority"
 	default 39
 
+menuconfig GPIO_SIM3_PBSTD
+	bool "SiM3 PBSTD GPIO driver"
+	depends on GPIO_SIM3
+	help
+	  Enable the SiM3 Port Bank Standard gpio driver.
+
+if GPIO_SIM3_PBSTD
+
 config GPIO_SIM3_PORT0
 	bool "Port 0"
+	depends on GPIO_SIM3_PBSTD
 	help
 	  Enable Port Bank PB0.
 
 config GPIO_SIM3_PORT1
 	bool "Port 1"
+	depends on GPIO_SIM3_PBSTD
 	help
 	  Enable Port Bank PB1.
 
 config GPIO_SIM3_PORT2
 	bool "Port 2"
+	depends on GPIO_SIM3_PBSTD
 	help
 	  Enable Port Bank PB2.
 
 config GPIO_SIM3_PORT3
 	bool "Port 3"
+	depends on GPIO_SIM3_PBSTD
 	help
 	  Enable Port Bank PB3.
+
+endif # GPIO_SIM3_PBSTD
+
+menuconfig GPIO_SIM3_PBHD
+	bool "SiM3 PBHD GPIO driver"
+	depends on GPIO_SIM3
+	help
+	  Enable the SiM3 High Drive Port Bank gpio driver.
+
+if GPIO_SIM3_PBHD
 
 config GPIO_SIM3_PORT4
 	bool "Port 4"
 	help
 	  Enable Port Bank PB4.
+
+endif # GPIO_SIM3_PBHD
 
 endif # GPIO_SIM3
