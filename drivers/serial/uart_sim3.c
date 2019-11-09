@@ -7,12 +7,14 @@
 #include <errno.h>
 #include <uart.h>
 #include <soc.h>
+#include <soc_pbstd_gpio.h>
+
 
 struct uart_sim3_config {
 	UART_Type *base;
 	u32_t baud_rate;
-	// struct soc_gpio_pin pin_rx;
-	// struct soc_gpio_pin pin_tx;
+	struct soc_pbstd_gpio_pin pin_rx;
+	struct soc_pbstd_gpio_pin pin_tx;
 	// unsigned int loc;
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	void (*irq_config_func)(struct device *dev);
@@ -218,36 +220,30 @@ static void uart_sim3_init_pins(struct device *dev)
 	CLKCTRL0->APBCLKG0_b.PLL0CEN = 1;
 	CLKCTRL0->APBCLKG0_b.PB0CEN = 1;
 
-	/* PB1 is on XBAR 0 */
+	/* PB0 is on XBAR 0 */
 	PBCFG0->XBAR0H_b.XBAR0EN = 1;
-
-	/* Skip all on PB0 */
-	PBSTD0->PBSKIPEN_SET = PBSTD_PBSKIPEN_PBSKIPEN_Msk;
-
-	/* Skip all on PB1 */
-	PBSTD1->PBSKIPEN_SET = PBSTD_PBSKIPEN_PBSKIPEN_Msk;
 	
-	/* PB1.12 RX CP210X
-	 * PB1.13 TX CP210X
+	/* PB0.00 RX CP210X
+	 * PB0.01 TX CP210X
 	 */
-	PBSTD1->PBSKIPEN_CLR = (1U << 12) | (1U << 13);
-	
-	/* PB1.14 CTS CP210X
-	 * PB1.15 RTS CP210X
+	PBSTD0->PBSKIPEN_CLR = (1U << 0) | (1U << 1);
+
+	/* PB0.02 CTS CP210X
+	 * PB0.03 RTS CP210X
 	 * Do not use rts and cts for now.
 	 */
 
-	u8_t pin = 13;
-	/* Configure PB1.13 as digital input */
-	PBSTD1->PBOUTMD_CLR = (1U << pin); /* Recommended for input mode. */
-	PBSTD1->PB_SET      = (1U << pin); /* Recommended for input mode. */
-	PBSTD1->PBMDSEL_SET = (1U << pin); /* Set digital mode. */
+	u8_t pin = 1;
+	/* Configure PB0.01 as digital input */
+	PBSTD0->PBOUTMD_CLR = (1U << pin); /* Recommended for input mode. */
+	PBSTD0->PB_SET      = (1U << pin); /* Recommended for input mode. */
+	PBSTD0->PBMDSEL_SET = (1U << pin); /* Set digital mode. */
 
-	pin = 12;
-	/* Configure PB1.12 as digital output. */
-	// PBSTD_1->PB_CLR      = (1U << pin); /* Set to 0. */
-	PBSTD1->PBOUTMD_SET = (1U << pin); /* push-pull */
-	PBSTD1->PBMDSEL_SET = (1U << pin); /* digital mode */
+	pin = 0;
+	/* Configure PB0.00 as digital output. */
+	PBSTD0->PB_CLR      = (1U << pin); /* Set to 0. */
+	PBSTD0->PBOUTMD_SET = (1U << pin); /* push-pull */
+	PBSTD0->PBMDSEL_SET = (1U << pin); /* digital mode */
 
 	/* Enable UART0EN in xbar0. */
 	PBCFG0->XBAR0H_SET = PBCFG_XBAR0H_UART0EN_Msk;
@@ -329,8 +325,8 @@ static const struct uart_sim3_config uart_sim3_0_config = {
 	.base = (UART_Type *)DT_SILABS_SIM3_UART_UART_0_BASE_ADDRESS,
 	// .clock = cmuClock_UART0,
 	.baud_rate = DT_SILABS_SIM3_UART_UART_0_CURRENT_SPEED,
-	//.pin_rx = PIN_UART0_RXD,
-	//.pin_tx = PIN_UART0_TXD,
+	.pin_rx = {PBSTD0, 1, SOC_PBSTD_GPIO_PIN_MODE_DIGITAL_PUSH_PULL_OUTPUT},
+	.pin_tx = {PBSTD0, 0, SOC_PBSTD_GPIO_PIN_MODE_DIGITAL_INPUT},
 	//.loc = DT_SILABS_SIM3_UART_UART_0_LOCATION,
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.irq_config_func = uart_sim3_config_func_0,
