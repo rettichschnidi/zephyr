@@ -8,11 +8,10 @@
 #include <uart.h>
 #include <soc.h>
 
+
 struct uart_sim3_config {
 	UART_Type *base;
 	u32_t baud_rate;
-	// struct soc_gpio_pin pin_rx;
-	// struct soc_gpio_pin pin_tx;
 	// unsigned int loc;
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	void (*irq_config_func)(struct device *dev);
@@ -215,49 +214,22 @@ static void uart_sim3_isr(void *arg)
 
 static void uart_sim3_init_pins(struct device *dev)
 {
-	CLKCTRL0->APBCLKG0_b.PLL0CEN = 1;
-	CLKCTRL0->APBCLKG0_b.PB0CEN = 1;
+	u8_t pin = 0;
+	/* Configure PB0.00 as digital output. */
+	PBSTD0->PB_CLR      = (1U << pin); /* Set to 0. */
+	PBSTD0->PBOUTMD_SET = (1U << pin); /* push-pull */
 
-	/* PB1 is on XBAR 0 */
-	PBCFG0->XBAR0H_b.XBAR0EN = 1;
-
-	/* Skip all on PB0 */
-	PBSTD0->PBSKIPEN_SET = PBSTD_PBSKIPEN_PBSKIPEN_Msk;
-
-	/* Skip all on PB1 */
-	PBSTD1->PBSKIPEN_SET = PBSTD_PBSKIPEN_PBSKIPEN_Msk;
-	
-	/* PB1.12 RX CP210X
-	 * PB1.13 TX CP210X
-	 */
-	PBSTD1->PBSKIPEN_CLR = (1U << 12) | (1U << 13);
-	
-	/* PB1.14 CTS CP210X
-	 * PB1.15 RTS CP210X
-	 * Do not use rts and cts for now.
-	 */
-
-	u8_t pin = 13;
-	/* Configure PB1.13 as digital input */
-	PBSTD1->PBOUTMD_CLR = (1U << pin); /* Recommended for input mode. */
-	PBSTD1->PB_SET      = (1U << pin); /* Recommended for input mode. */
-	PBSTD1->PBMDSEL_SET = (1U << pin); /* Set digital mode. */
-
-	pin = 12;
-	/* Configure PB1.12 as digital output. */
-	// PBSTD_1->PB_CLR      = (1U << pin); /* Set to 0. */
-	PBSTD1->PBOUTMD_SET = (1U << pin); /* push-pull */
-	PBSTD1->PBMDSEL_SET = (1U << pin); /* digital mode */
+	pin = 1;
+	PBSTD0->PBMDSEL_SET = (1U << pin); /* digital mode */
+	/* Configure PB0.01 as digital input */
+	PBSTD0->PBOUTMD_CLR = (1U << pin); /* Recommended for input mode. */
+	PBSTD0->PB_SET      = (1U << pin); /* Recommended for input mode. */
+	PBSTD0->PBMDSEL_SET = (1U << pin); /* Set digital mode. */
 
 	/* Enable UART0EN in xbar0. */
 	PBCFG0->XBAR0H_SET = PBCFG_XBAR0H_UART0EN_Msk;
 }
 
-//#if defined(ENABLE_FAST_CLOCK) && ENABLE_FAST_CLOCK
-//#define N 4 // 80 MHz
-//#else
-//#define N 2 // 20 MHz
-//#endif
 #define N (2)
 #define CALC_BAUDRATE(baudrate)					\
     (u32_t)((u32_t)(SystemCoreClock / (N * (u32_t)baudrate)) -1 )
@@ -272,13 +244,13 @@ static int uart_sim3_init(struct device *dev)
 	const struct uart_sim3_config *config = dev->config->config_info;
 	const u16_t baud = CALC_BAUDRATE(config->baud_rate);
 
-	/* The peripheral and gpio clock are already enabled from soc and gpio
+	/* The peripheral and gpio clocks are already enabled from soc and gpio
 	 * driver.
 	 */
 
 	/* Enable UART clock */
-	CLKCTRL0->APBCLKG0_b.UART1CEN = 1;
-	CLKCTRL0->APBCLKG0_b.UART0CEN = 1;
+	CLKCTRL0->APBCLKG0_b.UART1CEN = CLKCTRL0_APBCLKG0_UART1CEN_Enable;
+	CLKCTRL0->APBCLKG0_b.UART0CEN = CLKCTRL0_APBCLKG0_UART0CEN_Enable;
 
 	config->base->BAUDRATE_b.TBAUD = baud;
 	config->base->BAUDRATE_b.RBAUD = baud;
@@ -329,8 +301,6 @@ static const struct uart_sim3_config uart_sim3_0_config = {
 	.base = (UART_Type *)DT_SILABS_SIM3_UART_UART_0_BASE_ADDRESS,
 	// .clock = cmuClock_UART0,
 	.baud_rate = DT_SILABS_SIM3_UART_UART_0_CURRENT_SPEED,
-	//.pin_rx = PIN_UART0_RXD,
-	//.pin_tx = PIN_UART0_TXD,
 	//.loc = DT_SILABS_SIM3_UART_UART_0_LOCATION,
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.irq_config_func = uart_sim3_config_func_0,
@@ -366,8 +336,6 @@ static const struct uart_sim3_config uart_sim3_1_config = {
 	.base = (USART_TypeDef *)DT_SILABS_SIM3_UART_UART_1_BASE_ADDRESS,
 	.clock = cmuClock_UART1,
 	.baud_rate = DT_SILABS_SIM3_UART_UART_1_CURRENT_SPEED,
-	.pin_rx = PIN_UART1_RXD,
-	.pin_tx = PIN_UART1_TXD,
 	.loc = DT_SILABS_SIM3_UART_UART_1_LOCATION,
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.irq_config_func = uart_sim3_config_func_1,
@@ -403,8 +371,6 @@ static const struct uart_sim3_config usart_sim3_0_config = {
 	.base = (USART_TypeDef *)DT_SILABS_SIM3_USART_USART_0_BASE_ADDRESS,
 	.clock = cmuClock_USART0,
 	.baud_rate = DT_SILABS_SIM3_USART_USART_0_CURRENT_SPEED,
-	.pin_rx = PIN_USART0_RXD,
-	.pin_tx = PIN_USART0_TXD,
 	.loc = DT_SILABS_SIM3_USART_USART_0_LOCATION,
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.irq_config_func = usart_sim3_config_func_0,
@@ -445,8 +411,6 @@ static const struct uart_sim3_config usart_sim3_1_config = {
 	.base = (USART_TypeDef *)DT_SILABS_SIM3_USART_USART_1_BASE_ADDRESS,
 	.clock = cmuClock_USART1,
 	.baud_rate = DT_SILABS_SIM3_USART_USART_1_CURRENT_SPEED,
-	.pin_rx = PIN_USART1_RXD,
-	.pin_tx = PIN_USART1_TXD,
 	.loc = DT_SILABS_SIM3_USART_USART_1_LOCATION,
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.irq_config_func = usart_sim3_config_func_1,

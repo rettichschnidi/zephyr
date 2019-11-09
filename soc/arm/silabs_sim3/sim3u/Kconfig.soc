@@ -1,4 +1,4 @@
-# Kconfig - SIM3U MCU line
+# Kconfig - SiM3U MCU line
 #
 # Copyright (c) 2019 Christian Taedcke
 #
@@ -23,5 +23,200 @@ config SOC_SERIES_SIM3U_PREVENT_BRICKING
 		reset, it is not possible for a debug agent to gain control and thus
 		not possible to reprogram the on-chip flash. Adding a delay here gives
 		a debug agent sufficient time to connect.
+
+menuconfig SOC_SERIES_SIM3U_CROSSBAR_0
+	bool "Enable Crossbar 0"
+	help
+	  Enable crossbar 1
+
+if SOC_SERIES_SIM3U_CROSSBAR_0
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_0_SKIP
+	bool "Skip PB0.0"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_1_SKIP
+	bool "Skip PB0.1"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_2_SKIP
+	bool "Skip PB0.2"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_3_SKIP
+	bool "Skip PB0.3"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_4_SKIP
+	bool "Skip PB0.4"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_5_SKIP
+	bool "Skip PB0.5"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_6_SKIP
+	bool "Skip PB0.6"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_7_SKIP
+	bool "Skip PB0.7"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_8_SKIP
+	bool "Skip PB0.8"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_9_SKIP
+	bool "Skip PB0.9"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_10_SKIP
+	bool "Skip PB0.10"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_11_SKIP
+	bool "Skip PB0.11"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_12_SKIP
+	bool "Skip PB0.12"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_13_SKIP
+	bool "Skip PB0.13"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_14_SKIP
+	bool "Skip PB0.14"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB0_15_SKIP
+	bool "Skip PB0.15"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_0_SKIP
+	bool "Skip PB1.0"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_1_SKIP
+	bool "Skip PB1.1"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_2_SKIP
+	bool "Skip PB1.2"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_3_SKIP
+	bool "Skip PB1.3"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_4_SKIP
+	bool "Skip PB1.4"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_5_SKIP
+	bool "Skip PB1.5"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_6_SKIP
+	bool "Skip PB1.6"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_7_SKIP
+	bool "Skip PB1.7"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_8_SKIP
+	bool "Skip PB1.8"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_9_SKIP
+	bool "Skip PB1.9"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_10_SKIP
+	bool "Skip PB1.10"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_11_SKIP
+	bool "Skip PB1.11"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_12_SKIP
+	bool "Skip PB1.12"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_13_SKIP
+	bool "Skip PB1.13"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_14_SKIP
+	bool "Skip PB1.14"
+
+config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_15_SKIP
+	bool "Skip PB1.15"
+
+endif # SOC_SERIES_SIM3U_CROSSBAR_0
+
+menuconfig SOC_SERIES_SIM3U_CROSSBAR_1
+	bool "Enable Crossbar 1"
+	help
+	  Enable crossbar 1
+
+if SOC_SERIES_SIM3U_CROSSBAR_1
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_0_SKIP
+	bool "Skip PB2.0"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_1_SKIP
+	bool "Skip PB2.1"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_2_SKIP
+	bool "Skip PB2.2"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_3_SKIP
+	bool "Skip PB2.3"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_4_SKIP
+	bool "Skip PB2.4"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_5_SKIP
+	bool "Skip PB2.5"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_6_SKIP
+	bool "Skip PB2.6"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_7_SKIP
+	bool "Skip PB2.7"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_8_SKIP
+	bool "Skip PB2.8"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_9_SKIP
+	bool "Skip PB2.9"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_10_SKIP
+	bool "Skip PB2.10"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_11_SKIP
+	bool "Skip PB2.11"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_12_SKIP
+	bool "Skip PB2.12"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_13_SKIP
+	bool "Skip PB2.13"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB2_14_SKIP
+	bool "Skip PB2.14"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_0_SKIP
+	bool "Skip PB3.0"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_1_SKIP
+	bool "Skip PB3.1"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_2_SKIP
+	bool "Skip PB3.2"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_3_SKIP
+	bool "Skip PB3.3"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_4_SKIP
+	bool "Skip PB3.4"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_5_SKIP
+	bool "Skip PB3.5"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_6_SKIP
+	bool "Skip PB3.6"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_7_SKIP
+	bool "Skip PB3.7"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_8_SKIP
+	bool "Skip PB3.8"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_9_SKIP
+	bool "Skip PB3.9"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_10_SKIP
+	bool "Skip PB3.10"
+
+config SOC_SERIES_SIM3U_CROSSBAR_1_PB3_11_SKIP
+	bool "Skip PB3.11"
+
+endif # SOC_SERIES_SIM3U_CROSSBAR_1
 
 endif # SOC_SERIES_SIM3U
