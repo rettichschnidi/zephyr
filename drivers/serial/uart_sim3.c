@@ -217,33 +217,17 @@ static void uart_sim3_isr(void *arg)
 
 static void uart_sim3_init_pins(struct device *dev)
 {
-	CLKCTRL0->APBCLKG0_b.PLL0CEN = 1;
-	CLKCTRL0->APBCLKG0_b.PB0CEN = 1;
+	u8_t pin = 0;
+	/* Configure PB0.00 as digital output. */
+	PBSTD0->PB_CLR      = (1U << pin); /* Set to 0. */
+	PBSTD0->PBOUTMD_SET = (1U << pin); /* push-pull */
 
-	/* PB0 is on XBAR 0 */
-	PBCFG0->XBAR0H_b.XBAR0EN = 1;
-	
-	/* PB0.00 RX CP210X
-	 * PB0.01 TX CP210X
-	 */
-	PBSTD0->PBSKIPEN_CLR = (1U << 0) | (1U << 1);
-
-	/* PB0.02 CTS CP210X
-	 * PB0.03 RTS CP210X
-	 * Do not use rts and cts for now.
-	 */
-
-	u8_t pin = 1;
+	pin = 1;
+	PBSTD0->PBMDSEL_SET = (1U << pin); /* digital mode */
 	/* Configure PB0.01 as digital input */
 	PBSTD0->PBOUTMD_CLR = (1U << pin); /* Recommended for input mode. */
 	PBSTD0->PB_SET      = (1U << pin); /* Recommended for input mode. */
 	PBSTD0->PBMDSEL_SET = (1U << pin); /* Set digital mode. */
-
-	pin = 0;
-	/* Configure PB0.00 as digital output. */
-	PBSTD0->PB_CLR      = (1U << pin); /* Set to 0. */
-	PBSTD0->PBOUTMD_SET = (1U << pin); /* push-pull */
-	PBSTD0->PBMDSEL_SET = (1U << pin); /* digital mode */
 
 	/* Enable UART0EN in xbar0. */
 	PBCFG0->XBAR0H_SET = PBCFG_XBAR0H_UART0EN_Msk;

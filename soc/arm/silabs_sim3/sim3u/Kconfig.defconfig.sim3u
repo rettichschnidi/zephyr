@@ -17,6 +17,12 @@ endif # GPIO
 
 if SERIAL
 
+config SOC_SERIES_SIM3U_CROSSBAR_0
+	default y
+
+config SOC_SERIES_SIM3U_CROSSBAR_1
+	default y
+
 config UART_SIM3
 	default y
 

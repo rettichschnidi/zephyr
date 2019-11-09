@@ -51,9 +51,6 @@ static int gpio_sim3_configure(struct device *dev, int access_op, u32_t pin,
 	/* Enable APB clock to the PPL0 registers. */
 	CLKCTRL0->APBCLKG0_b.PLL0CEN = 1;
 
-	/* Enable APB clock to the port bank modules. */
-	CLKCTRL0->APBCLKG0_b.PB0CEN = 1;
-
 	/* Check for an invalid pin configuration */
 	if ((flags & GPIO_INT) && (flags & GPIO_DIR_OUT)) {
 		return -EINVAL;
