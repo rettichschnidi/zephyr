@@ -273,8 +273,8 @@ static int uart_sim3_init(struct device *dev)
 	 */
 
 	/* Enable UART clock */
-	CLKCTRL0->APBCLKG0_b.UART1CEN = 1;
-	CLKCTRL0->APBCLKG0_b.UART0CEN = 1;
+	CLKCTRL0->APBCLKG0_b.UART1CEN = CLKCTRL0_APBCLKG0_UART1CEN_Enable;
+	CLKCTRL0->APBCLKG0_b.UART0CEN = CLKCTRL0_APBCLKG0_UART0CEN_Enable;
 
 	config->base->BAUDRATE_b.TBAUD = baud;
 	config->base->BAUDRATE_b.RBAUD = baud;
