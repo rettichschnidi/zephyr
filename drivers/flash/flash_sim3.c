@@ -187,6 +187,8 @@ static int flash_sim3_init(struct device *dev)
 	/* Ensure supply monitor is configured as reset source. */
 	RSTSRC0->RESETFLAG_b.VMONRF = RSTSRC0_RESETEN_VMONREN_Enable;
 
+	/* CLKCTRL0->AHBCLKG_b.FLASHCEN is set per default */
+
 	/* Lock the flash. */
 	flash_sim3_write_protection(dev, true);
 
