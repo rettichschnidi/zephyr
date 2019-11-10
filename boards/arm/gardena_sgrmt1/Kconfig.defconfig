@@ -7,4 +7,7 @@
 
 if BOARD_GARDENA_SGRMT1
 
+config BOARD
+default "GARDENA_SGRMT1"
+
 endif # BOARD_GARDENA_SGRMT1
