@@ -1,0 +1,37 @@
+# Silicon Labs Si4467 802.15.4 configuration options
+
+# Copyright (c) 2020 Reto Schneider
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig IEEE802154_SI4467
+    bool "Silicon Labs 4467 IEEE 802.15.4 Driver"
+    depends on NETWORKING && SPI
+    select SPI
+    select GPIO
+
+if IEEE802154_SI4467
+
+config IEEE802154_SI4467_DRV_NAME
+    string "Silicon Labs 4467 IEEE 802.15.4 Driver's name"
+    default "IEEE802154_si4467"
+    help
+      This option sets the driver name
+
+config IEEE802154_SI4467_RX_STACK_SIZE
+    int "Driver's internal RX thread stack size"
+    default 800
+    help
+      This option sets the driver's stack size for its internal RX thread.
+      The default value should be sufficient, but in case it proves to be
+      a too little one, this option makes it easy to play with the size.
+
+config IEEE802154_SI4467_INIT_PRIO
+    int "Silicon Labs 4467 IEEE 802.15.4 initialization priority"
+    default 80
+    help
+      Set the initialization priority number. Do not mess with it unless
+      you know what you are doing. Beware si4467 requires gpio and spi to
+      be ready first (and sometime gpio should be the very first as spi
+      might need it too). And of course it has to start before the net stack.
+
+endif
