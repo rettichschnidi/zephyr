@@ -12,7 +12,7 @@
 #include <irq_offload.h>
 
 static irq_offload_routine_t offload_routine;
-static void *offload_param;
+static const void *offload_param;
 
 /* Called by trap_s exception handler */
 void z_irq_do_offload(void)
@@ -20,11 +20,9 @@ void z_irq_do_offload(void)
 	offload_routine(offload_param);
 }
 
-void arch_irq_offload(irq_offload_routine_t routine, void *parameter)
+void arch_irq_offload(irq_offload_routine_t routine, const void *parameter)
 {
-	unsigned int key;
 
-	key = irq_lock();
 	offload_routine = routine;
 	offload_param = parameter;
 
@@ -32,6 +30,4 @@ void arch_irq_offload(irq_offload_routine_t routine, void *parameter)
 		:
 		: [id] "i"(_TRAP_S_SCALL_IRQ_OFFLOAD) : );
 
-	irq_unlock(key);
 }
-

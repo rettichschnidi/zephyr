@@ -5,7 +5,9 @@
 
 config SOC_SERIES_KINETIS_K8X
 	bool "Kinetis K8x Series MCU"
+	select ARM
 	select CPU_CORTEX_M4
+	select CPU_CORTEX_M_HAS_DWT
 	select SOC_FAMILY_KINETIS
 	select CPU_HAS_NXP_MPU
 	select CPU_HAS_FPU
@@ -15,6 +17,7 @@ config SOC_SERIES_KINETIS_K8X
 	select HAS_MCUX_FTFX
 	select HAS_MCUX_FTM
 	select HAS_MCUX_LPUART
+	select HAS_MCUX_PIT
 	select HAS_MCUX_RTC
 	select HAS_MCUX_SIM
 	select HAS_MCUX_TRNG

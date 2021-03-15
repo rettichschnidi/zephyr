@@ -16,27 +16,33 @@ extern "C" {
 /**
  * @brief Function to create device PM list
  */
-extern  void sys_pm_create_device_list(void);
+void pm_create_device_list(void);
 
 /**
  * @brief Function to suspend the devices in PM device list
  */
-extern int sys_pm_suspend_devices(void);
+int pm_suspend_devices(void);
+
+/**
+ * @brief Function to put the devices in PM device list in low power state
+ */
+int pm_low_power_devices(void);
 
 /**
  * @brief Function to force suspend the devices in PM device list
  */
-extern int sys_pm_force_suspend_devices(void);
+int pm_force_suspend_devices(void);
 
 /**
  * @brief Function to resume the devices in PM device list
  */
-extern void sys_pm_resume_devices(void);
+void pm_resume_devices(void);
 
 /**
  * @brief Function to get the next PM state based on the ticks
  */
-extern enum power_states sys_pm_policy_next_state(s32_t ticks);
+struct pm_state_info pm_policy_next_state(int32_t ticks);
+
 
 #ifdef __cplusplus
 }

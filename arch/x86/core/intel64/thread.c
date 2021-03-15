@@ -7,39 +7,54 @@
 #include <ksched.h>
 #include <kernel_structs.h>
 #include <kernel_internal.h>
+#include <offsets_short.h>
+#include <x86_mmu.h>
 
 extern void x86_sse_init(struct k_thread *); /* in locore.S */
 
-void arch_new_thread(struct k_thread *thread, k_thread_stack_t *stack,
-		     size_t stack_size, k_thread_entry_t entry,
-		     void *parameter1, void *parameter2, void *parameter3,
-		     int priority, unsigned int options)
-{
-#if defined(CONFIG_X86_USERSPACE) || defined(CONFIG_X86_STACK_PROTECTION)
-	struct z_x86_thread_stack_header *header =
-		(struct z_x86_thread_stack_header *)stack;
-#endif
+/* FIXME: This exists to make space for a "return address" at the top
+ * of the stack.  Obviously this is unused at runtime, but is required
+ * for alignment: stacks at runtime should be 16-byte aligned, and a
+ * CALL will therefore push a return address that leaves the stack
+ * misaligned.  Effectively we're wasting 8 bytes here to undo (!) the
+ * alignment that the upper level code already tried to do for us.  We
+ * should clean this up.
+ */
+struct x86_initial_frame {
+	/* zeroed return address for ABI */
+	uint64_t rip;
+};
 
-	Z_ASSERT_VALID_PRIO(priority, entry);
-	z_new_thread_init(thread, Z_THREAD_STACK_BUFFER(stack),
-			  stack_size, priority, options);
+void arch_new_thread(struct k_thread *thread, k_thread_stack_t *stack,
+		     char *stack_ptr, k_thread_entry_t entry,
+		     void *p1, void *p2, void *p3)
+{
+	void *switch_entry;
+	struct x86_initial_frame *iframe;
 
 #if CONFIG_X86_STACK_PROTECTION
-	/* Set guard area to read-only to catch stack overflows */
-	z_x86_mmu_set_flags(&z_x86_kernel_ptables, &header->guard_page,
-			    MMU_PAGE_SIZE, MMU_ENTRY_READ, Z_X86_MMU_RW,
-			    true);
+	z_x86_set_stack_guard(stack);
 #endif
-
-	thread->callee_saved.rsp = (long) Z_THREAD_STACK_BUFFER(stack);
-	thread->callee_saved.rsp += (stack_size - 8); /* fake RIP for ABI */
-	thread->callee_saved.rip = (long) z_thread_entry;
+#ifdef CONFIG_USERSPACE
+	switch_entry = z_x86_userspace_prepare_thread(thread);
+	thread->arch.cs = X86_KERNEL_CS;
+	thread->arch.ss = X86_KERNEL_DS;
+#else
+	switch_entry = z_thread_entry;
+#endif
+	iframe = Z_STACK_PTR_TO_FRAME(struct x86_initial_frame, stack_ptr);
+	iframe->rip = 0;
+	thread->callee_saved.rsp = (long) iframe;
+	thread->callee_saved.rip = (long) switch_entry;
 	thread->callee_saved.rflags = EFLAGS_INITIAL;
 
+	/* Parameters to entry point, which is populated in
+	 * thread->callee_saved.rip
+	 */
 	thread->arch.rdi = (long) entry;
-	thread->arch.rsi = (long) parameter1;
-	thread->arch.rdx = (long) parameter2;
-	thread->arch.rcx = (long) parameter3;
+	thread->arch.rsi = (long) p1;
+	thread->arch.rdx = (long) p2;
+	thread->arch.rcx = (long) p3;
 
 	x86_sse_init(thread);
 

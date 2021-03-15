@@ -8,24 +8,24 @@
 Library for working with devicetrees at a higher level compared to dtlib. Like
 dtlib, this library presents a tree of devicetree nodes, but the nodes are
 augmented with information from bindings and include some interpretation of
-properties.
+properties. Some of this interpretation is based on conventions established
+by the Linux kernel, so the Documentation/devicetree/bindings in the Linux
+source code is sometimes good reference material.
 
-Bindings are files that describe devicetree nodes. Devicetree nodes are usually
-mapped to bindings via their 'compatible = "..."' property, but a binding can
-also come from a 'child-binding:' key in the binding for the parent devicetree
-node.
+Bindings are YAML files that describe devicetree nodes. Devicetree
+nodes are usually mapped to bindings via their 'compatible = "..."' property,
+but a binding can also come from a 'child-binding:' key in the binding for the
+parent devicetree node.
 
 Each devicetree node (dtlib.Node) gets a corresponding edtlib.Node instance,
 which has all the information related to the node.
 
-The top-level entry point of the library is the EDT class. EDT.__init__() takes
-a .dts file to parse and a list of paths to directories containing bindings.
+The top-level entry points for the library are the EDT and Binding classes.
+See their constructor docstrings for details. There is also a
+bindings_from_paths() helper function.
 """
 
-# NOTE: testedtlib.py is the test suite for this library. It can be run
-# directly as a script:
-#
-#   ./testedtlib.py
+# NOTE: testedtlib.py is the test suite for this library.
 
 # Implementation notes
 # --------------------
@@ -33,6 +33,11 @@ a .dts file to parse and a list of paths to directories containing bindings.
 # A '_' prefix on an identifier in Python is a convention for marking it private.
 # Please do not access private things. Instead, think of what API you need, and
 # add it.
+#
+# This module is not meant to have any global state. It should be possible to
+# create several EDT objects with independent binding paths and flags. If you
+# need to add a configuration parameter or the like, store it in the EDT
+# instance, and initialize it e.g. with a constructor argument.
 #
 # This library is layered on top of dtlib, and is not meant to expose it to
 # clients. This keeps the header generation script simple.
@@ -61,14 +66,11 @@ a .dts file to parse and a list of paths to directories containing bindings.
 #
 #   @properties are documented in the class docstring, as if they were
 #   variables. See the existing @properties for a template.
-#
-# - Please use ""-quoted strings instead of ''-quoted strings, just to make
-#   things consistent (''-quoting is more common otherwise in Python)
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+import logging
 import os
 import re
-import sys
 
 import yaml
 try:
@@ -78,9 +80,11 @@ try:
 except ImportError:
     from yaml import Loader
 
-from dtlib import DT, DTError, to_num, to_nums, TYPE_EMPTY, TYPE_NUMS, \
-                  TYPE_PHANDLE, TYPE_PHANDLES_AND_NUMS
+from dtlib import DT, DTError, to_num, to_nums, TYPE_EMPTY, TYPE_BYTES, \
+                  TYPE_NUM, TYPE_NUMS, TYPE_STRING, TYPE_STRINGS, \
+                  TYPE_PHANDLE, TYPE_PHANDLES, TYPE_PHANDLES_AND_NUMS
 from grutils import Graph
+
 
 #
 # Public classes
@@ -96,15 +100,58 @@ class EDT:
     nodes:
       A list of Node objects for the nodes that appear in the devicetree
 
+    compat2nodes:
+      A collections.defaultdict that maps each 'compatible' string that appears
+      on some Node to a list of Nodes with that compatible.
+
+    compat2okay:
+      Like compat2nodes, but just for nodes with status 'okay'.
+
+    label2node:
+      A collections.OrderedDict that maps a node label to the node with
+      that label.
+
+    dep_ord2node:
+      A collections.OrderedDict that maps an ordinal to the node with
+      that dependency ordinal.
+
+    chosen_nodes:
+      A collections.OrderedDict that maps the properties defined on the
+      devicetree's /chosen node to their values. 'chosen' is indexed by
+      property name (a string), and values are converted to Node objects.
+      Note that properties of the /chosen node which can't be converted
+      to a Node are not included in the value.
+
     dts_path:
       The .dts path passed to __init__()
 
+    dts_source:
+      The final DTS source code of the loaded devicetree after merging nodes
+      and processing /delete-node/ and /delete-property/, as a string
+
     bindings_dirs:
       The bindings directory paths passed to __init__()
+
+    scc_order:
+      A list of lists of Nodes. All elements of each list
+      depend on each other, and the Nodes in any list do not depend
+      on any Node in a subsequent list. Each list defines a Strongly
+      Connected Component (SCC) of the graph.
+
+      For an acyclic graph each list will be a singleton. Cycles
+      will be represented by lists with multiple nodes. Cycles are
+      not expected to be present in devicetree graphs.
+
+    The standard library's pickle module can be used to marshal and
+    unmarshal EDT objects.
     """
-    def __init__(self, dts, bindings_dirs, warn_file=None):
-        """
-        EDT constructor. This is the top-level entry point to the library.
+    def __init__(self, dts, bindings_dirs,
+                 warn_reg_unit_address_mismatch=True,
+                 default_prop_types=True,
+                 support_fixed_partitions_on_any_bus=True,
+                 infer_binding_for_paths=None,
+                 err_on_deprecated_properties=False):
+        """EDT constructor.
 
         dts:
           Path to devicetree .dts file
@@ -113,12 +160,34 @@ class EDT:
           List of paths to directories containing bindings, in YAML format.
           These directories are recursively searched for .yaml files.
 
-        warn_file:
-          'file' object to write warnings to. If None, sys.stderr is used.
+        warn_reg_unit_address_mismatch (default: True):
+          If True, a warning is logged if a node has a 'reg' property where
+          the address of the first entry does not match the unit address of the
+          node
+
+        default_prop_types (default: True):
+          If True, default property types will be used when a node has no
+          bindings.
+
+        support_fixed_partitions_on_any_bus (default True):
+          If True, set the Node.bus for 'fixed-partitions' compatible nodes
+          to None.  This allows 'fixed-partitions' binding to match regardless
+          of the bus the 'fixed-partition' is under.
+
+        infer_binding_for_paths (default: None):
+          An iterable of devicetree paths identifying nodes for which bindings
+          should be inferred from the node content.  (Child nodes are not
+          processed.)  Pass none if no nodes should support inferred bindings.
+
+        err_on_deprecated_properties (default: False):
+          If True and 'dts' has any deprecated properties set, raise an error.
+
         """
-        # Do this indirection with None in case sys.stderr is deliberately
-        # overridden
-        self._warn_file = sys.stderr if warn_file is None else warn_file
+        self._warn_reg_unit_address_mismatch = warn_reg_unit_address_mismatch
+        self._default_prop_types = default_prop_types
+        self._fixed_partitions_no_bus = support_fixed_partitions_on_any_bus
+        self._infer_binding_for_paths = set(infer_binding_for_paths or [])
+        self._err_on_deprecated_properties = bool(err_on_deprecated_properties)
 
         self.dts_path = dts
         self.bindings_dirs = bindings_dirs
@@ -126,10 +195,12 @@ class EDT:
         self._dt = DT(dts)
         _check_dt(self._dt)
 
-        self._init_compat2binding(bindings_dirs)
+        self._init_compat2binding()
         self._init_nodes()
+        self._init_graph()
+        self._init_luts()
 
-        self._define_order()
+        self._check()
 
     def get_node(self, path):
         """
@@ -141,47 +212,55 @@ class EDT:
         except DTError as e:
             _err(e)
 
+    @property
+    def chosen_nodes(self):
+        ret = OrderedDict()
+
+        try:
+            chosen = self._dt.get_node("/chosen")
+        except DTError:
+            return ret
+
+        for name, prop in chosen.props.items():
+            try:
+                node = prop.to_path()
+            except DTError:
+                # DTS value is not phandle or string, or path doesn't exist
+                continue
+
+            ret[name] = self._node2enode[node]
+
+        return ret
+
     def chosen_node(self, name):
         """
         Returns the Node pointed at by the property named 'name' in /chosen, or
         None if the property is missing
         """
-        try:
-            chosen = self._dt.get_node("/chosen")
-        except DTError:
-            # No /chosen node
-            return None
+        return self.chosen_nodes.get(name)
 
-        if name not in chosen.props:
-            return None
-
-        # to_path() checks that the node exists
-        return self._node2enode[chosen.props[name].to_path()]
+    @property
+    def dts_source(self):
+        return f"{self._dt}"
 
     def __repr__(self):
         return "<EDT for '{}', binding directories '{}'>".format(
             self.dts_path, self.bindings_dirs)
 
+    @property
     def scc_order(self):
-        """
-        Returns a list of lists of Nodes where all elements of each list
-        depend on each other, and the Nodes in any list do not depend
-        on any Node in a subsequent list.  Each list defines a Strongly
-        Connected Component (SCC) of the graph.
-
-        For an acyclic graph each list will be a singleton.  Cycles
-        will be represented by lists with multiple nodes.  Cycles are
-        not expected to be present in devicetree graphs.
-        """
         try:
             return self._graph.scc_order()
         except Exception as e:
             raise EDTError(e)
 
-    def _define_order(self):
+    def _init_graph(self):
         # Constructs a graph of dependencies between Node instances,
-        # then calculates a partial order over the dependencies.  The
-        # algorithm supports detecting dependency loops.
+        # which is usable for computing a partial order over the dependencies.
+        # The algorithm supports detecting dependency loops.
+        #
+        # Actually computing the SCC order is lazily deferred to the
+        # first time the scc_order property is read.
 
         self._graph = Graph()
 
@@ -200,6 +279,8 @@ class EDT:
                         self._graph.add_edge(node, phandle_node)
                 elif prop.type == 'phandle-array':
                     for cd in prop.val:
+                        if cd is None:
+                            continue
                         self._graph.add_edge(node, cd.controller)
 
             # A Node depends on whatever supports the interrupts it
@@ -207,23 +288,19 @@ class EDT:
             for intr in node.interrupts:
                 self._graph.add_edge(node, intr.controller)
 
-        # Calculate an order that ensures no node is before any node
-        # it depends on.  This sets the dep_ordinal field in each
-        # Node.
-        self.scc_order()
-
-    def _init_compat2binding(self, bindings_dirs):
-        # Creates self._compat2binding. This is a dictionary that maps
-        # (<compatible>, <bus>) tuples (both strings) to (<binding>, <path>)
-        # tuples. <binding> is the binding in parsed PyYAML format, and <path>
-        # the path to the binding (nice for binding-related error messages).
+    def _init_compat2binding(self):
+        # Creates self._compat2binding, a dictionary that maps
+        # (<compatible>, <bus>) tuples (both strings) to Binding objects.
         #
-        # For example, self._compat2binding["company,dev", "can"] contains the
-        # binding/path for the 'company,dev' device, when it appears on the CAN
-        # bus.
+        # The Binding objects are created from YAML files discovered
+        # in self.bindings_dirs as needed.
+        #
+        # For example, self._compat2binding["company,dev", "can"]
+        # contains the Binding for the 'company,dev' device, when it
+        # appears on the CAN bus.
         #
         # For bindings that don't specify a bus, <bus> is None, so that e.g.
-        # self._compat2binding["company,notonbus", None] contains the binding.
+        # self._compat2binding["company,notonbus", None] is the Binding.
         #
         # Only bindings for 'compatible' strings that appear in the devicetree
         # are loaded.
@@ -235,7 +312,9 @@ class EDT:
             "|".join(re.escape(compat) for compat in dt_compats)
         ).search
 
-        self._binding_paths = _binding_paths(bindings_dirs)
+        self._binding_paths = _binding_paths(self.bindings_dirs)
+        self._binding_fname2path = {os.path.basename(path): path
+                                    for path in self._binding_paths}
 
         self._compat2binding = {}
         for binding_path in self._binding_paths:
@@ -254,176 +333,59 @@ class EDT:
             try:
                 # Parsed PyYAML output (Python lists/dictionaries/strings/etc.,
                 # representing the file)
-                binding = yaml.load(contents, Loader=_BindingLoader)
+                raw = yaml.load(contents, Loader=_BindingLoader)
             except yaml.YAMLError as e:
-                self._warn("'{}' appears in binding directories but isn't "
-                           "valid YAML: {}".format(binding_path, e))
+                _LOG.warning(
+                        f"'{binding_path}' appears in binding directories "
+                        f"but isn't valid YAML: {e}")
                 continue
 
-            binding_compat = self._binding_compat(binding, binding_path)
-            if binding_compat not in dt_compats:
-                # Either not a binding (binding_compat is None -- might be a
-                # binding fragment or a spurious file), or a binding whose
-                # compatible does not appear in the devicetree (picked up via
-                # some unrelated text in the binding file that happened to
-                # match a compatible)
+            # Convert the raw data to a Binding object, erroring out
+            # if necessary.
+            binding = self._binding(raw, binding_path, dt_compats)
+
+            if binding is None:
+                # Either the file is not a binding or it's a binding
+                # whose compatible does not appear in the devicetree
+                # (picked up via some unrelated text in the binding
+                # file that happened to match a compatible).
                 continue
-
-            # It's a match. Merge in the included bindings, do sanity checks,
-            # and register the binding.
-
-            binding = self._merge_included_bindings(binding, binding_path)
-            self._check_binding(binding, binding_path)
-
-            bus = _binding_bus(binding)
 
             # Do not allow two different bindings to have the same
-            # 'compatible:'/'parent-bus:' combo
-            old_binding = self._compat2binding.get((binding_compat, bus))
+            # 'compatible:'/'on-bus:' combo
+            old_binding = self._compat2binding.get((binding.compatible,
+                                                    binding.on_bus))
             if old_binding:
-                msg = "both {} and {} have 'compatible: {}'".format(
-                    old_binding[1], binding_path, binding_compat)
-                if bus is not None:
-                    msg += " and 'parent-bus: {}'".format(bus)
+                msg = (f"both {old_binding.path} and {binding_path} have "
+                       f"'compatible: {binding.compatible}'")
+                if binding.on_bus is not None:
+                    msg += f" and 'on-bus: {binding.on_bus}'"
                 _err(msg)
 
-            self._compat2binding[binding_compat, bus] = (binding, binding_path)
+            # Register the binding.
+            self._compat2binding[binding.compatible, binding.on_bus] = binding
 
-    def _binding_compat(self, binding, binding_path):
-        # Returns the string listed in 'compatible:' in 'binding', or None if
-        # no compatible is found. Only takes 'self' for the sake of
-        # self._warn().
+    def _binding(self, raw, binding_path, dt_compats):
+        # Convert a 'raw' binding from YAML to a Binding object and return it.
         #
-        # Also searches for legacy compatibles on the form
+        # Error out if the raw data looks like an invalid binding.
         #
-        #   properties:
-        #       compatible:
-        #           constraint: <string>
+        # Return None if the file doesn't contain a binding or the
+        # binding's compatible isn't in dt_compats.
 
-        def new_style_compat():
-            # New-style 'compatible: "foo"' compatible
+        # Get the 'compatible:' string.
+        if raw is None or "compatible" not in raw:
+            # Empty file, binding fragment, spurious file, etc.
+            return None
 
-            if binding is None or "compatible" not in binding:
-                # Empty file, binding fragment, spurious file, or old-style
-                # compat
-                return None
+        compatible = raw["compatible"]
 
-            compatible = binding["compatible"]
-            if not isinstance(compatible, str):
-                _err("malformed 'compatible: {}' field in {} - "
-                     "should be a string, not {}"
-                     .format(compatible, binding_path,
-                             type(compatible).__name__))
+        if compatible not in dt_compats:
+            # Not a compatible we care about.
+            return None
 
-            return compatible
-
-        def old_style_compat():
-            # Old-style 'constraint: "foo"' compatible
-
-            try:
-                return binding["properties"]["compatible"]["constraint"]
-            except Exception:
-                return None
-
-        new_compat = new_style_compat()
-        old_compat = old_style_compat()
-        if old_compat:
-            self._warn("The 'properties: compatible: constraint: ...' way of "
-                       "specifying the compatible in {} is deprecated. Put "
-                       "'compatible: \"{}\"' at the top level of the binding "
-                       "instead.".format(binding_path, old_compat))
-
-            if new_compat:
-                _err("compatibles for {} should be specified with either "
-                     "'compatible:' at the top level or with the legacy "
-                     "'properties: compatible: constraint: ...' field, not "
-                     "both".format(binding_path))
-
-            return old_compat
-
-        return new_compat
-
-    def _merge_included_bindings(self, binding, binding_path):
-        # Merges any bindings listed in the 'include:' section of 'binding'
-        # into the top level of 'binding'. Also supports the legacy
-        # 'inherits: !include ...' syntax for including bindings.
-        #
-        # Properties in 'binding' take precedence over properties from included
-        # bindings.
-
-        fnames = []
-
-        if "include" in binding:
-            include = binding.pop("include")
-            if isinstance(include, str):
-                fnames.append(include)
-            elif isinstance(include, list):
-                if not all(isinstance(elm, str) for elm in include):
-                    _err("all elements in 'include:' in {} should be strings"
-                         .format(binding_path))
-                fnames += include
-            else:
-                _err("'include:' in {} should be a string or a list of strings"
-                     .format(binding_path))
-
-        # Legacy syntax
-        if "inherits" in binding:
-            self._warn("the 'inherits:' syntax in {} is deprecated and will "
-                       "be removed - please use 'include: foo.yaml' or "
-                       "'include: [foo.yaml, bar.yaml]' instead"
-                       .format(binding_path))
-
-            inherits = binding.pop("inherits")
-            if not isinstance(inherits, list) or \
-               not all(isinstance(elm, str) for elm in inherits):
-                _err("malformed 'inherits:' in " + binding_path)
-            fnames += inherits
-
-        if not fnames:
-            return binding
-
-        # Got a list of included files in 'fnames'. Now we need to merge them
-        # together and then merge them into 'binding'.
-
-        # First, merge the included files together. If more than one included
-        # file has a 'required:' for a particular property, OR the values
-        # together, so that 'required: true' wins.
-
-        merged_included = self._load_binding(fnames[0])
-        for fname in fnames[1:]:
-            included = self._load_binding(fname)
-            _merge_props(merged_included, included, None, binding_path,
-                         check_required=False)
-
-        # Next, merge the merged included files into 'binding'. Error out if
-        # 'binding' has 'required: false' while the merged included files have
-        # 'required: true'.
-
-        _merge_props(binding, merged_included, None, binding_path,
-                     check_required=True)
-
-        return binding
-
-    def _load_binding(self, fname):
-        # Returns the contents of the binding given by 'fname' after merging
-        # any bindings it lists in 'include:' into it. 'fname' is just the
-        # basename of the file, so we check that there aren't multiple
-        # candidates.
-
-        paths = [path for path in self._binding_paths
-                 if os.path.basename(path) == fname]
-
-        if not paths:
-            _err("'{}' not found".format(fname))
-
-        if len(paths) > 1:
-            _err("multiple candidates for included file '{}': {}"
-                 .format(fname, ", ".join(paths)))
-
-        with open(paths[0], encoding="utf-8") as f:
-            return self._merge_included_bindings(
-                yaml.load(f, Loader=_BindingLoader),
-                paths[0])
+        # Initialize and return the Binding object.
+        return Binding(binding_path, self._binding_fname2path, raw=raw)
 
     def _init_nodes(self):
         # Creates a list of edtlib.Node objects from the dtlib.Node objects, in
@@ -440,9 +402,13 @@ class EDT:
             node = Node()
             node.edt = self
             node._node = dt_node
+            if "compatible" in node._node.props:
+                node.compats = node._node.props["compatible"].to_strings()
+            else:
+                node.compats = []
+            node.bus_node = node._bus_node(self._fixed_partitions_no_bus)
             node._init_binding()
             node._init_regs()
-            node._set_instance_no()
 
             self.nodes.append(node)
             self._node2enode[dt_node] = node
@@ -451,149 +417,63 @@ class EDT:
             # These depend on all Node objects having been created, because
             # they (either always or sometimes) reference other nodes, so we
             # run them separately
-            node._init_props()
+            node._init_props(default_prop_types=self._default_prop_types,
+                             err_on_deprecated=
+                             self._err_on_deprecated_properties)
             node._init_interrupts()
             node._init_pinctrls()
 
-    def _check_binding(self, binding, binding_path):
-        # Does sanity checking on 'binding'. Only takes 'self' for the sake of
-        # self._warn().
+        if self._warn_reg_unit_address_mismatch:
+            # This warning matches the simple_bus_reg warning in dtc
+            for node in self.nodes:
+                if node.regs and node.regs[0].addr != node.unit_addr:
+                    _LOG.warning("unit address and first address in 'reg' "
+                                 f"(0x{node.regs[0].addr:x}) don't match for "
+                                 f"{node.path}")
 
-        for prop in "title", "description":
-            if prop not in binding:
-                _err("missing '{}' property in {}".format(prop, binding_path))
+    def _init_luts(self):
+        # Initialize node lookup tables (LUTs).
 
-            if not isinstance(binding[prop], str) or not binding[prop]:
-                _err("missing, malformed, or empty '{}' in {}"
-                     .format(prop, binding_path))
+        self.label2node = OrderedDict()
+        self.dep_ord2node = OrderedDict()
+        self.compat2nodes = defaultdict(list)
+        self.compat2okay = defaultdict(list)
 
-        ok_top = {"title", "description", "compatible", "properties", "#cells",
-                  "parent-bus", "child-bus", "parent", "child",
-                  "child-binding", "sub-node"}
+        for node in self.nodes:
+            for label in node.labels:
+                self.label2node[label] = node
 
-        for prop in binding:
-            if prop not in ok_top and not prop.endswith("-cells"):
-                _err("unknown key '{}' in {}, expected one of {}, or *-cells"
-                     .format(prop, binding_path, ", ".join(ok_top)))
+            for compat in node.compats:
+                self.compat2nodes[compat].append(node)
 
-        for pc in "parent", "child":
-            # 'parent/child-bus:'
-            bus_key = pc + "-bus"
-            if bus_key in binding and \
-               not isinstance(binding[bus_key], str):
-                self._warn("malformed '{}:' value in {}, expected string"
-                           .format(bus_key, binding_path))
+                if node.status == "okay":
+                    self.compat2okay[compat].append(node)
 
-            # Legacy 'child/parent: bus: ...' keys
-            if pc in binding:
-                self._warn("'{0}: bus: ...' in {1} is deprecated and will be "
-                           "removed - please use a top-level '{0}-bus:' key "
-                           "instead (see binding-template.yaml)"
-                           .format(pc, binding_path))
+        for nodeset in self.scc_order:
+            node = nodeset[0]
+            self.dep_ord2node[node.dep_ordinal] = node
 
-                # Just 'bus:' is expected
-                if binding[pc].keys() != {"bus"}:
-                    _err("expected (just) 'bus:' in '{}:' in {}"
-                         .format(pc, binding_path))
+    def _check(self):
+        # Tree-wide checks and warnings.
 
-                if not isinstance(binding[pc]["bus"], str):
-                    _err("malformed '{}: bus:' value in {}, expected string"
-                         .format(pc, binding_path))
+        for binding in self._compat2binding.values():
+            for spec in binding.prop2specs.values():
+                if not spec.enum or spec.type != 'string':
+                    continue
 
-        self._check_binding_properties(binding, binding_path)
-
-        if "child-binding" in binding:
-            if not isinstance(binding["child-binding"], dict):
-                _err("malformed 'child-binding:' in {}, expected a binding "
-                     "(dictionary with keys/values)".format(binding_path))
-
-            self._check_binding(binding["child-binding"], binding_path)
-
-        if "sub-node" in binding:
-            self._warn("'sub-node: properties: ...' in {} is deprecated and "
-                       "will be removed - please give a full binding for the "
-                       "child node in 'child-binding:' instead (see "
-                       "binding-template.yaml)".format(binding_path))
-
-            if binding["sub-node"].keys() != {"properties"}:
-                _err("expected (just) 'properties:' in 'sub-node:' in {}"
-                     .format(binding_path))
-
-            self._check_binding_properties(binding["sub-node"], binding_path)
-
-        if "#cells" in binding:
-            self._warn('"#cells:" in {} is deprecated and will be removed - '
-                       "please put 'interrupt-cells:', 'pwm-cells:', "
-                       "'gpio-cells:', etc., instead. The name should match "
-                       "the name of the corresponding phandle-array property "
-                       "(see binding-template.yaml)".format(binding_path))
-
-        def ok_cells_val(val):
-            # Returns True if 'val' is an okay value for '*-cells:' (or the
-            # legacy '#cells:')
-
-            return isinstance(val, list) and \
-                   all(isinstance(elm, str) for elm in val)
-
-        for key, val in binding.items():
-            if key.endswith("-cells") or key == "#cells":
-                if not ok_cells_val(val):
-                    _err("malformed '{}:' in {}, expected a list of strings"
-                         .format(key, binding_path))
-
-    def _check_binding_properties(self, binding, binding_path):
-        # _check_binding() helper for checking the contents of 'properties:'.
-        # Only takes 'self' for the sake of self._warn().
-
-        if "properties" not in binding:
-            return
-
-        ok_prop_keys = {"description", "type", "required", "category",
-                        "constraint", "enum", "const", "default"}
-
-        for prop_name, options in binding["properties"].items():
-            for key in options:
-                if key == "category":
-                    self._warn(
-                        "please put 'required: {}' instead of 'category: {}' "
-                        "in properties: {}: ...' in {} - 'category' will be "
-                        "removed".format(
-                            "true" if options["category"] == "required"
-                                else "false",
-                            options["category"], prop_name, binding_path))
-
-                if key not in ok_prop_keys:
-                    _err("unknown setting '{}' in 'properties: {}: ...' in {}, "
-                         "expected one of {}".format(
-                             key, prop_name, binding_path,
-                             ", ".join(ok_prop_keys)))
-
-            _check_prop_type_and_default(
-                prop_name, options.get("type"),
-                options.get("required") or options.get("category") == "required",
-                options.get("default"), binding_path)
-
-            if "required" in options and not isinstance(options["required"], bool):
-                _err("malformed 'required:' setting '{}' for '{}' in 'properties' "
-                     "in {}, expected true/false"
-                     .format(options["required"], prop_name, binding_path))
-
-            if "description" in options and \
-               not isinstance(options["description"], str):
-                _err("missing, malformed, or empty 'description' for '{}' in "
-                     "'properties' in {}".format(prop_name, binding_path))
-
-            if "enum" in options and not isinstance(options["enum"], list):
-                _err("enum in {} for property '{}' is not a list"
-                     .format(binding_path, prop_name))
-
-            if "const" in options and not isinstance(options["const"], (int, str)):
-                _err("const in {} for property '{}' is not a scalar"
-                     .format(binding_path, prop_name))
-
-    def _warn(self, msg):
-        print("warning: " + msg, file=self._warn_file)
-
+                if not spec.enum_tokenizable:
+                    _LOG.warning(
+                        f"compatible '{binding.compatible}' "
+                        f"in binding '{binding.path}' has non-tokenizable enum "
+                        f"for property '{spec.name}': " +
+                        ', '.join(repr(x) for x in spec.enum))
+                elif not spec.enum_upper_tokenizable:
+                    _LOG.warning(
+                        f"compatible '{binding.compatible}' "
+                        f"in binding '{binding.path}' has enum for property "
+                        f"'{spec.name}' that is only tokenizable "
+                        'in lowercase: ' +
+                        ', '.join(repr(x) for x in spec.enum))
 
 class Node:
     """
@@ -626,6 +506,14 @@ class Node:
       The text from the 'label' property on the node, or None if the node has
       no 'label'
 
+    labels:
+      A list of all of the devicetree labels for the node, in the same order
+      as the labels appear, but with duplicates removed.
+
+      This corresponds to the actual devicetree source labels, unlike the
+      "label" attribute, which is the value of a devicetree property named
+      "label".
+
     parent:
       The Node instance for the devicetree parent of the Node, or None if the
       node is the root node
@@ -638,8 +526,8 @@ class Node:
       A non-negative integer value such that the value for a Node is
       less than the value for all Nodes that depend on it.
 
-      The ordinal is defined for all Nodes including those that are not
-      'enabled', and is unique among nodes in its EDT 'nodes' list.
+      The ordinal is defined for all Nodes, and is unique among nodes in its
+      EDT 'nodes' list.
 
     required_by:
       A list with the nodes that directly depend on the node
@@ -647,21 +535,13 @@ class Node:
     depends_on:
       A list with the nodes that the node directly depends on
 
-    enabled:
-      True unless the node has 'status = "disabled"'
+    status:
+      The node's status property value, as a string, or "okay" if the node
+      has no status property set. If the node's status property is "ok",
+      it is converted to "okay" for consistency.
 
     read_only:
       True if the node has a 'read-only' property, and False otherwise
-
-    instance_no:
-      Dictionary that maps each 'compatible' string for the node to a unique
-      index among all nodes that have that 'compatible' string.
-
-      As an example, 'instance_no["foo,led"] == 3' can be read as "this is the
-      fourth foo,led node".
-
-      Only enabled nodes (status != "disabled") are counted. 'instance_no' is
-      meaningless for disabled nodes.
 
     matching_compat:
       The 'compatible' string for the binding that matched the node, or None if
@@ -696,12 +576,28 @@ class Node:
       pinctrl-<index> properties.
 
     bus:
-      The bus for the node as specified in its binding, e.g. "i2c" or "spi".
-      None if the binding doesn't specify a bus.
+      If the node is a bus node (has a 'bus:' key in its binding), then this
+      attribute holds the bus type, e.g. "i2c" or "spi". If the node is not a
+      bus node, then this attribute is None.
+
+    on_bus:
+      The bus the node appears on, e.g. "i2c" or "spi". The bus is determined
+      by searching upwards for a parent node whose binding has a 'bus:' key,
+      returning the value of the first 'bus:' key found. If none of the node's
+      parents has a 'bus:' key, this attribute is None.
+
+    bus_node:
+      Like on_bus, but contains the Node for the bus controller, or None if the
+      node is not on a bus.
 
     flash_controller:
       The flash controller for the node. Only meaningful for nodes representing
       flash partitions.
+
+    spi_cs_gpio:
+      The device's SPI GPIO chip select as a ControllerAndData instance, if it
+      exists, and None otherwise. See
+      Documentation/devicetree/bindings/spi/spi-controller.yaml in the Linux kernel.
     """
     @property
     def name(self):
@@ -722,19 +618,13 @@ class Node:
         except ValueError:
             _err("{!r} has non-hex unit address".format(self))
 
-        addr = _translate(addr, self._node)
-
-        if self.regs and self.regs[0].addr != addr:
-            self.edt._warn("unit-address and first reg (0x{:x}) don't match "
-                           "for {}".format(self.regs[0].addr, self.name))
-
-        return addr
+        return _translate(addr, self._node)
 
     @property
     def description(self):
         "See the class docstring."
-        if self._binding and "description" in self._binding:
-            return self._binding["description"].strip()
+        if self._binding:
+            return self._binding.description
         return None
 
     @property
@@ -748,6 +638,11 @@ class Node:
         if "label" in self._node.props:
             return self._node.props["label"].to_string()
         return None
+
+    @property
+    def labels(self):
+        "See the class docstring"
+        return self._node.labels
 
     @property
     def parent(self):
@@ -774,10 +669,19 @@ class Node:
         return self.edt._graph.depends_on(self)
 
     @property
-    def enabled(self):
+    def status(self):
         "See the class docstring"
-        return "status" not in self._node.props or \
-            self._node.props["status"].to_string() != "disabled"
+        status = self._node.props.get("status")
+
+        if status is None:
+            as_string = "okay"
+        else:
+            as_string = status.to_string()
+
+        if as_string == "ok":
+            as_string = "okay"
+
+        return as_string
 
     @property
     def read_only(self):
@@ -793,7 +697,15 @@ class Node:
     @property
     def bus(self):
         "See the class docstring"
-        return _binding_bus(self._binding)
+        if self._binding:
+            return self._binding.bus
+        return None
+
+    @property
+    def on_bus(self):
+        "See the class docstring"
+        bus_node = self.bus_node
+        return bus_node.bus if bus_node else None
 
     @property
     def flash_controller(self):
@@ -815,6 +727,28 @@ class Node:
             return controller.parent
         return controller
 
+    @property
+    def spi_cs_gpio(self):
+        "See the class docstring"
+
+        if not (self.on_bus == "spi" and "cs-gpios" in self.bus_node.props):
+            return None
+
+        if not self.regs:
+            _err("{!r} needs a 'reg' property, to look up the chip select index "
+                 "for SPI".format(self))
+
+        parent_cs_lst = self.bus_node.props["cs-gpios"].val
+
+        # cs-gpios is indexed by the unit address
+        cs_index = self.regs[0].addr
+        if cs_index >= len(parent_cs_lst):
+            _err("index from 'regs' in {!r} ({}) is >= number of cs-gpios "
+                 "in {!r} ({})".format(
+                     self, cs_index, self.bus_node, len(parent_cs_lst)))
+
+        return parent_cs_lst[cs_index]
+
     def __repr__(self):
         return "<Node {} in '{}', {}>".format(
             self.path, self.edt.dts_path,
@@ -833,39 +767,90 @@ class Node:
         # initialized, which is guaranteed by going through the nodes in
         # node_iter() order.
 
-        if "compatible" in self._node.props:
-            self.compats = self._node.props["compatible"].to_strings()
-            bus = self._bus_from_parent_binding()
+        if self.path in self.edt._infer_binding_for_paths:
+            self._binding_from_properties()
+            return
+
+        if self.compats:
+            on_bus = self.on_bus
 
             for compat in self.compats:
-                if (compat, bus) in self.edt._compat2binding:
-                    # Binding found
-                    self.matching_compat = compat
-                    self._binding, self.binding_path = \
-                        self.edt._compat2binding[compat, bus]
+                # When matching, respect the order of the 'compatible' entries,
+                # and for each one first try to match against an explicitly
+                # specified bus (if any) and then against any bus. This is so
+                # that matching against bindings which do not specify a bus
+                # works the same way in Zephyr as it does elsewhere.
+                if (compat, on_bus) in self.edt._compat2binding:
+                    binding = self.edt._compat2binding[compat, on_bus]
+                elif (compat, None) in self.edt._compat2binding:
+                    binding = self.edt._compat2binding[compat, None]
+                else:
+                    continue
 
-                    return
+                self.binding_path = binding.path
+                self.matching_compat = compat
+                self._binding = binding
+                return
         else:
-            # No 'compatible' property. See if the parent binding has a
-            # 'child-binding:' key that gives the binding (or a legacy
-            # 'sub-node:' key).
-
-            self.compats = []
+            # No 'compatible' property. See if the parent binding has
+            # a compatible. This can come from one or more levels of
+            # nesting with 'child-binding:'.
 
             binding_from_parent = self._binding_from_parent()
             if binding_from_parent:
                 self._binding = binding_from_parent
-                self.binding_path = self.parent.binding_path
-                self.matching_compat = self.parent.matching_compat
+                self.binding_path = self._binding.path
+                self.matching_compat = self._binding.compatible
 
                 return
 
         # No binding found
         self._binding = self.binding_path = self.matching_compat = None
 
+    def _binding_from_properties(self):
+        # Sets up a Binding object synthesized from the properties in the node.
+
+        if self.compats:
+            _err(f"compatible in node with inferred binding: {self.path}")
+
+        # Synthesize a 'raw' binding as if it had been parsed from YAML.
+        raw = {
+            'description': 'Inferred binding from properties, via edtlib.',
+            'properties': {},
+        }
+        for name, prop in self._node.props.items():
+            pp = OrderedDict()
+            if prop.type == TYPE_EMPTY:
+                pp["type"] = "boolean"
+            elif prop.type == TYPE_BYTES:
+                pp["type"] = "uint8-array"
+            elif prop.type == TYPE_NUM:
+                pp["type"] = "int"
+            elif prop.type == TYPE_NUMS:
+                pp["type"] = "array"
+            elif prop.type == TYPE_STRING:
+                pp["type"] = "string"
+            elif prop.type == TYPE_STRINGS:
+                pp["type"] = "string-array"
+            elif prop.type == TYPE_PHANDLE:
+                pp["type"] = "phandle"
+            elif prop.type == TYPE_PHANDLES:
+                pp["type"] = "phandles"
+            elif prop.type == TYPE_PHANDLES_AND_NUMS:
+                pp["type"] = "phandle-array"
+            else:
+                _err(f"cannot infer binding from property: {prop}")
+            raw['properties'][name] = pp
+
+        # Set up Node state.
+        self.binding_path = None
+        self.matching_compat = None
+        self.compats = []
+        self._binding = Binding(None, {}, raw=raw, require_compatible=False)
+
     def _binding_from_parent(self):
         # Returns the binding from 'child-binding:' in the parent node's
-        # binding (or from the legacy 'sub-node:' key), or None if missing
+        # binding.
 
         if not self.parent:
             return None
@@ -874,80 +859,86 @@ class Node:
         if not pbinding:
             return None
 
-        if "child-binding" in pbinding:
-            return pbinding["child-binding"]
-
-        # Backwards compatibility
-        if "sub-node" in pbinding:
-            return {"title": pbinding["title"],
-                    "description": pbinding["description"],
-                    "properties": pbinding["sub-node"]["properties"]}
+        if pbinding.child_binding:
+            return pbinding.child_binding
 
         return None
 
-    def _bus_from_parent_binding(self):
-        # _init_binding() helper. Returns the bus specified by 'child-bus: ...'
-        # in the parent binding (or the legacy 'child: bus: ...'), or None if
-        # missing.
+    def _bus_node(self, support_fixed_partitions_on_any_bus = True):
+        # Returns the value for self.bus_node. Relies on parent nodes being
+        # initialized before their children.
 
         if not self.parent:
+            # This is the root node
             return None
 
-        binding = self.parent._binding
-        if not binding:
+        # Treat 'fixed-partitions' as if they are not on any bus.  The reason is
+        # that flash nodes might be on a SPI or controller or SoC bus.  Having
+        # bus be None means we'll always match the binding for fixed-partitions
+        # also this means want processing the fixed-partitions node we wouldn't
+        # try to do anything bus specific with it.
+        if support_fixed_partitions_on_any_bus and "fixed-partitions" in self.compats:
             return None
 
-        if "child-bus" in binding:
-            return binding["child-bus"]
+        if self.parent.bus:
+            # The parent node is a bus node
+            return self.parent
 
-        # Legacy key
-        if "child" in binding:
-            # _check_binding() has checked that the "bus" key exists
-            return binding["child"]["bus"]
+        # Same bus node as parent (possibly None)
+        return self.parent.bus_node
 
-        return None
-
-    def _init_props(self):
+    def _init_props(self, default_prop_types=False, err_on_deprecated=False):
         # Creates self.props. See the class docstring. Also checks that all
         # properties on the node are declared in its binding.
 
         self.props = OrderedDict()
 
-        if not self._binding:
-            return
+        node = self._node
+        if self._binding:
+            prop2specs = self._binding.prop2specs
+        else:
+            prop2specs = None
 
         # Initialize self.props
-        if "properties" in self._binding:
-            for name, options in self._binding["properties"].items():
-                self._init_prop(name, options)
+        if prop2specs:
+            for prop_spec in prop2specs.values():
+                self._init_prop(prop_spec, err_on_deprecated)
+            self._check_undeclared_props()
+        elif default_prop_types:
+            for name in node.props:
+                if name not in _DEFAULT_PROP_SPECS:
+                    continue
+                prop_spec = _DEFAULT_PROP_SPECS[name]
+                val = self._prop_val(name, prop_spec.type, False, False, None,
+                                     err_on_deprecated)
+                self.props[name] = Property(prop_spec, val, self)
 
-        self._check_undeclared_props()
+    def _init_prop(self, prop_spec, err_on_deprecated):
+        # _init_props() helper for initializing a single property.
+        # 'prop_spec' is a PropertySpec object from the node's binding.
 
-    def _init_prop(self, name, options):
-        # _init_props() helper for initializing a single property
-
-        prop_type = options.get("type")
+        name = prop_spec.name
+        prop_type = prop_spec.type
         if not prop_type:
             _err("'{}' in {} lacks 'type'".format(name, self.binding_path))
 
-        val = self._prop_val(
-            name, prop_type,
-            options.get("required") or options.get("category") == "required",
-            options.get("default"))
+        val = self._prop_val(name, prop_type, prop_spec.deprecated,
+                             prop_spec.required, prop_spec.default,
+                             err_on_deprecated)
 
         if val is None:
             # 'required: false' property that wasn't there, or a property type
             # for which we store no data.
             return
 
-        enum = options.get("enum")
+        enum = prop_spec.enum
         if enum and val not in enum:
             _err("value of property '{}' on {} in {} ({!r}) is not in 'enum' "
                  "list in {} ({!r})"
                  .format(name, self.path, self.edt.dts_path, val,
                          self.binding_path, enum))
 
-        const = options.get("const")
+        const = prop_spec.const
         if const is not None and val != const:
             _err("value of property '{}' on {} in {} ({!r}) is different from "
                  "the 'const' value specified in {} ({!r})"
@@ -959,19 +950,10 @@ class Node:
         if name[0] == "#" or name.endswith("-map"):
             return
 
-        prop = Property()
-        prop.node = self
-        prop.name = name
-        prop.description = options.get("description")
-        if prop.description:
-            prop.description = prop.description.strip()
-        prop.val = val
-        prop.type = prop_type
-        prop.enum_index = None if enum is None else enum.index(val)
+        self.props[name] = Property(prop_spec, val, self)
 
-        self.props[name] = prop
-
-    def _prop_val(self, name, prop_type, required, default):
+    def _prop_val(self, name, prop_type, deprecated, required, default,
+                  err_on_deprecated):
         # _init_prop() helper for getting the property's value
         #
         # name:
@@ -980,18 +962,32 @@ class Node:
         # prop_type:
         #   Property type from binding (a string like "int")
         #
-        # optional:
-        #   True if the property isn't required to exist
+        # deprecated:
+        #   True if the property is deprecated
+        #
+        # required:
+        #   True if the property is required to exist
         #
         # default:
         #   Default value to use when the property doesn't exist, or None if
         #   the binding doesn't give a default value
+        #
+        # err_on_deprecated:
+        #   If True, a deprecated property is an error instead of warning.
 
         node = self._node
         prop = node.props.get(name)
 
+        if prop and deprecated:
+            msg = (f"'{name}' is marked as deprecated in 'properties:' "
+                   f"in {self.binding_path} for node {node.path}.")
+            if err_on_deprecated:
+                _err(msg)
+            else:
+                _LOG.warning(msg)
+
         if not prop:
-            if required and self.enabled:
+            if required and self.status == "okay":
                 _err("'{}' is marked as required in 'properties:' in {}, but "
                      "does not appear in {!r}".format(
                          name, self.binding_path, node))
@@ -1039,16 +1035,19 @@ class Node:
             # This type is a bit high-level for dtlib as it involves
             # information from bindings and *-names properties, so there's no
             # to_phandle_array() in dtlib. Do the type check ourselves.
-            if prop.type not in (TYPE_PHANDLE, TYPE_PHANDLES_AND_NUMS):
-                _err("expected property '{0}' in {1} in {2} to be assigned "
-                     "with '{0} = < &foo 1 2 ... &bar 3 4 ... >' (a mix of "
-                     "phandles and numbers), not '{3}'"
-                     .format(name, node.path, node.dt.filename, prop))
+            if prop.type not in (TYPE_PHANDLE, TYPE_PHANDLES, TYPE_PHANDLES_AND_NUMS):
+                _err(f"expected property '{name}' in {node.path} in "
+                     f"{node.dt.filename} to be assigned "
+                     f"with '{name} = < &foo ... &bar 1 ... &baz 2 3 >' "
+                     f"(a mix of phandles and numbers), not '{prop}'")
 
             return self._standard_phandle_val_list(prop)
 
-        # prop_type == "compound". We have already checked that the 'type:'
-        # value is valid, in _check_binding().
+        if prop_type == "path":
+            return self.edt._node2enode[prop.to_path()]
+
+        # prop_type == "compound". Checking that the 'type:'
+        # value is valid is done in _check_prop_type_and_default().
         #
         # 'compound' is a dummy type for properties that don't fit any of the
         # patterns above, so that we can require all entries in 'properties:'
@@ -1057,11 +1056,6 @@ class Node:
 
     def _check_undeclared_props(self):
         # Checks that all properties are declared in the binding
-
-        if "properties" in self._binding:
-            declared_props = self._binding["properties"].keys()
-        else:
-            declared_props = set()
 
         for prop_name in self._node.props:
             # Allow a few special properties to not be declared in the binding
@@ -1073,7 +1067,7 @@ class Node:
                    "interrupt-parent", "interrupts-extended", "device_type"}:
                 continue
 
-            if prop_name not in declared_props:
+            if prop_name not in self._binding.prop2specs:
                 _err("'{}' appears in {} in {}, but is not declared in "
                      "'properties:' in {}"
                      .format(prop_name, self._node.path, self.edt.dts_path,
@@ -1092,11 +1086,19 @@ class Node:
         address_cells = _address_cells(node)
         size_cells = _size_cells(node)
 
-        for raw_reg in _slice(node, "reg", 4*(address_cells + size_cells)):
+        for raw_reg in _slice(node, "reg", 4*(address_cells + size_cells),
+                              "4*(<#address-cells> (= {}) + <#size-cells> (= {}))"
+                              .format(address_cells, size_cells)):
             reg = Register()
             reg.node = self
-            reg.addr = _translate(to_num(raw_reg[:4*address_cells]), node)
-            reg.size = to_num(raw_reg[4*address_cells:])
+            if address_cells == 0:
+                reg.addr = None
+            else:
+                reg.addr = _translate(to_num(raw_reg[:4*address_cells]), node)
+            if size_cells == 0:
+                reg.size = None
+            else:
+                reg.size = to_num(raw_reg[4*address_cells:])
             if size_cells != 0 and reg.size == 0:
                 _err("zero-sized 'reg' in {!r} seems meaningless (maybe you "
                      "want a size of one or #size-cells = 0 instead)"
@@ -1170,7 +1172,9 @@ class Node:
         #
         #     <name>-names = "...", "...", ...
         #
-        # Returns a list of ControllerAndData instances.
+        # Returns a list of Optional[ControllerAndData] instances.
+        # An index is None if the underlying phandle-array element
+        # is unspecified.
 
         if prop.name.endswith("gpios"):
             # There's some slight special-casing for *-gpios properties in that
@@ -1179,12 +1183,17 @@ class Node:
             basename = "gpio"
         else:
             # Strip -s. We've already checked that the property names end in -s
-            # in _check_binding().
+            # in _check_prop_type_and_default().
             basename = prop.name[:-1]
 
         res = []
 
-        for controller_node, data in _phandle_val_list(prop, basename):
+        for item in _phandle_val_list(prop, basename):
+            if item is None:
+                res.append(None)
+                continue
+
+            controller_node, data = item
             mapped_controller, mapped_data = \
                 _map_phandle_array_entry(prop.node, controller_node, data,
                                          basename)
@@ -1210,11 +1219,8 @@ class Node:
             _err("{} controller {!r} for {!r} lacks binding"
                  .format(basename, controller._node, self._node))
 
-        if basename + "-cells" in controller._binding:
-            cell_names = controller._binding[basename + "-cells"]
-        elif "#cells" in controller._binding:
-            # Backwards compatibility
-            cell_names = controller._binding["#cells"]
+        if basename in controller._binding.specifier2cells:
+            cell_names = controller._binding.specifier2cells[basename]
         else:
             # Treat no *-cells in the binding the same as an empty *-cells, so
             # that bindings don't have to have e.g. an empty 'clock-cells:' for
@@ -1229,17 +1235,6 @@ class Node:
                          len(data_list)))
 
         return OrderedDict(zip(cell_names, data_list))
-
-    def _set_instance_no(self):
-        # Initializes self.instance_no
-
-        self.instance_no = {}
-
-        for compat in self.compats:
-            self.instance_no[compat] = 0
-            for other_node in self.edt.nodes:
-                if compat in other_node.compats and other_node.enabled:
-                    self.instance_no[compat] += 1
 
 
 class Register:
@@ -1256,8 +1251,8 @@ class Register:
       there is no 'reg-names' property
 
     addr:
-      The starting address of the register, in the parent address space. Any
-      'ranges' properties are taken into account.
+      The starting address of the register, in the parent address space, or None
+      if #address-cells is zero. Any 'ranges' properties are taken into account.
 
     size:
       The length of the register in bytes
@@ -1267,8 +1262,10 @@ class Register:
 
         if self.name is not None:
             fields.append("name: " + self.name)
-        fields.append("addr: " + hex(self.addr))
-        fields.append("size: " + hex(self.size))
+        if self.addr is not None:
+            fields.append("addr: " + hex(self.addr))
+        if self.size is not None:
+            fields.append("size: " + hex(self.size))
 
         return "<Register, {}>".format(", ".join(fields))
 
@@ -1350,33 +1347,40 @@ class Property:
     additional info from the 'properties:' section of the binding.
 
     Only properties mentioned in 'properties:' get created. Properties of type
-    'compound' currently do not get Property instances, as I'm not sure what
-    information to store for them.
+    'compound' currently do not get Property instances, as it's not clear
+    what to generate for them.
+
+    These attributes are available on Property objects. Several are
+    just convenience accessors for attributes on the PropertySpec object
+    accessible via the 'spec' attribute.
 
     These attributes are available on Property objects:
 
     node:
       The Node instance the property is on
 
+    spec:
+      The PropertySpec object which specifies this property.
+
     name:
-      The name of the property
+      Convenience for spec.name.
 
     description:
-      The description string from the property as given in the binding, or None
-      if missing. Leading and trailing whitespace (including newlines) is
-      removed.
+      Convenience for spec.name with leading and trailing whitespace
+      (including newlines) removed.
 
     type:
-      A string with the type of the property, as given in the binding.
+      Convenience for spec.type.
 
     val:
-      The value of the property, with the format determined by the 'type:' key
-      from the binding.
+      The value of the property, with the format determined by spec.type,
+      which comes from the 'type:' string in the binding.
 
         - For 'type: int/array/string/string-array', 'val' is what you'd expect
           (a Python integer or string, or a list of them)
 
-        - For 'type: phandle', 'val' is the pointed-to Node instance
+        - For 'type: phandle' and 'type: path', 'val' is the pointed-to Node
+          instance
 
         - For 'type: phandles', 'val' is a list of the pointed-to Node
           instances
@@ -1384,10 +1388,47 @@ class Property:
         - For 'type: phandle-array', 'val' is a list of ControllerAndData
           instances. See the documentation for that class.
 
+    val_as_token:
+      The value of the property as a token, i.e. with non-alphanumeric
+      characters replaced with underscores. This is only safe to access
+      if self.enum_tokenizable returns True.
+
     enum_index:
-      The index of the property's value in the 'enum:' list in the binding, or
-      None if the binding has no 'enum:'
+      The index of 'val' in 'spec.enum' (which comes from the 'enum:' list
+      in the binding), or None if spec.enum is None.
     """
+
+    def __init__(self, spec, val, node):
+        self.val = val
+        self.spec = spec
+        self.node = node
+
+    @property
+    def name(self):
+        "See the class docstring"
+        return self.spec.name
+
+    @property
+    def description(self):
+        "See the class docstring"
+        return self.spec.description.strip()
+
+    @property
+    def type(self):
+        "See the class docstring"
+        return self.spec.type
+
+    @property
+    def val_as_token(self):
+        "See the class docstring"
+        return re.sub(_NOT_ALPHANUM_OR_UNDERSCORE, '_', self.val)
+
+    @property
+    def enum_index(self):
+        "See the class docstring"
+        enum = self.spec.enum
+        return enum.index(self.val) if enum else None
+
     def __repr__(self):
         fields = ["name: " + self.name,
                   # repr() to deal with lists
@@ -1400,38 +1441,477 @@ class Property:
         return "<Property, {}>".format(", ".join(fields))
 
 
+class Binding:
+    """
+    Represents a parsed binding.
+
+    These attributes are available on Binding objects:
+
+    path:
+      The absolute path to the file defining the binding.
+
+    description:
+      The free-form description of the binding.
+
+    compatible:
+      The compatible string the binding matches.
+
+      This may be None. For example, it's None when the Binding is inferred
+      from node properties. It can also be None for Binding objects created
+      using 'child-binding:' with no compatible.
+
+    prop2specs:
+      A collections.OrderedDict mapping property names to PropertySpec objects
+      describing those properties' values.
+
+    specifier2cells:
+      A collections.OrderedDict that maps specifier space names (like "gpio",
+      "clock", "pwm", etc.) to lists of cell names.
+
+      For example, if the binding YAML contains 'pin' and 'flags' cell names
+      for the 'gpio' specifier space, like this:
+
+          gpio-cells:
+          - pin
+          - flags
+
+      Then the Binding object will have a 'specifier2cells' attribute mapping
+      "gpio" to ["pin", "flags"]. A missing key should be interpreted as zero
+      cells.
+
+    raw:
+      The binding as an object parsed from YAML.
+
+    bus:
+      If nodes with this binding's 'compatible' describe a bus, a string
+      describing the bus type (like "i2c"). None otherwise.
+
+    on_bus:
+      If nodes with this binding's 'compatible' appear on a bus, a string
+      describing the bus type (like "i2c"). None otherwise.
+
+    child_binding:
+      If this binding describes the properties of child nodes, then
+      this is a Binding object for those children; it is None otherwise.
+      A Binding object's 'child_binding.child_binding' is not None if there
+      are multiple levels of 'child-binding' descriptions in the binding.
+    """
+
+    def __init__(self, path, fname2path, raw=None,
+                 require_compatible=True, require_description=True):
+        """
+        Binding constructor.
+
+        path:
+          Path to binding YAML file. May be None.
+
+        fname2path:
+          Map from include files to their absolute paths. Must
+          not be None, but may be empty.
+
+        raw:
+          Optional raw content in the binding.
+          This does not have to have any "include:" lines resolved.
+          May be left out, in which case 'path' is opened and read.
+          This can be used to resolve child bindings, for example.
+
+        require_compatible:
+          If True, it is an error if the binding does not contain a
+          "compatible:" line. If False, a missing "compatible:" is
+          not an error. Either way, "compatible:" must be a string
+          if it is present in the binding.
+
+        require_description:
+          If True, it is an error if the binding does not contain a
+          "description:" line. If False, a missing "description:" is
+          not an error. Either way, "description:" must be a string
+          if it is present in the binding.
+        """
+        self.path = path
+        self._fname2path = fname2path
+
+        if raw is None:
+            with open(path, encoding="utf-8") as f:
+                raw = yaml.load(f, Loader=_BindingLoader)
+
+        # Merge any included files into self.raw. This also pulls in
+        # inherited child binding definitions, so it has to be done
+        # before initializing those.
+        self.raw = self._merge_includes(raw, self.path)
+
+        # Recursively initialize any child bindings. These don't
+        # require a 'compatible' or 'description' to be well defined,
+        # but they must be dicts.
+        if "child-binding" in raw:
+            if not isinstance(raw["child-binding"], dict):
+                _err(f"malformed 'child-binding:' in {self.path}, "
+                     "expected a binding (dictionary with keys/values)")
+            self.child_binding = Binding(path, fname2path,
+                                         raw=raw["child-binding"],
+                                         require_compatible=False,
+                                         require_description=False)
+        else:
+            self.child_binding = None
+
+        # Make sure this is a well defined object.
+        self._check(require_compatible, require_description)
+
+        # Initialize look up tables.
+        self.prop2specs = OrderedDict()
+        for prop_name in self.raw.get("properties", {}).keys():
+            self.prop2specs[prop_name] = PropertySpec(prop_name, self)
+        self.specifier2cells = OrderedDict()
+        for key, val in self.raw.items():
+            if key.endswith("-cells"):
+                self.specifier2cells[key[:-len("-cells")]] = val
+
+    def __repr__(self):
+        if self.compatible:
+            compat = f" for compatible '{self.compatible}'"
+        else:
+            compat = ""
+        return f"<Binding {os.path.basename(self.path)}" + compat + ">"
+
+    @property
+    def description(self):
+        "See the class docstring"
+        return self.raw['description']
+
+    @property
+    def compatible(self):
+        "See the class docstring"
+        return self.raw.get('compatible')
+
+    @property
+    def bus(self):
+        "See the class docstring"
+        return self.raw.get('bus')
+
+    @property
+    def on_bus(self):
+        "See the class docstring"
+        return self.raw.get('on-bus')
+
+    def _merge_includes(self, raw, binding_path):
+        # Constructor helper. Merges included files in
+        # 'raw["include"]' into 'raw' using 'self._include_paths' as a
+        # source of include files, removing the "include" key while
+        # doing so.
+        #
+        # This treats 'binding_path' as the binding file being built up
+        # and uses it for error messages.
+
+        if "include" not in raw:
+            return raw
+
+        include = raw.pop("include")
+        fnames = []
+        if isinstance(include, str):
+            fnames.append(include)
+        elif isinstance(include, list):
+            if not all(isinstance(elem, str) for elem in include):
+                _err(f"all elements in 'include:' in {binding_path} "
+                     "should be strings")
+            fnames += include
+        else:
+            _err(f"'include:' in {binding_path} "
+                 "should be a string or a list of strings")
+
+        # First, merge the included files together. If more than one included
+        # file has a 'required:' for a particular property, OR the values
+        # together, so that 'required: true' wins.
+
+        merged = {}
+        for fname in fnames:
+            _merge_props(merged, self._load_raw(fname), None, binding_path,
+                         check_required=False)
+
+        # Next, merge the merged included files into 'raw'. Error out if
+        # 'raw' has 'required: false' while the merged included files have
+        # 'required: true'.
+
+        _merge_props(raw, merged, None, binding_path, check_required=True)
+
+        return raw
+
+    def _load_raw(self, fname):
+        # Returns the contents of the binding given by 'fname' after merging
+        # any bindings it lists in 'include:' into it. 'fname' is just the
+        # basename of the file, so we check that there aren't multiple
+        # candidates.
+
+        path = self._fname2path.get(fname)
+
+        if not path:
+            _err(f"'{fname}' not found")
+
+        with open(path, encoding="utf-8") as f:
+            contents = yaml.load(f, Loader=_BindingLoader)
+
+        return self._merge_includes(contents, path)
+
+    def _check(self, require_compatible, require_description):
+        # Does sanity checking on the binding.
+
+        raw = self.raw
+
+        if "compatible" in raw:
+            compatible = raw["compatible"]
+            if not isinstance(compatible, str):
+                _err(f"malformed 'compatible: {compatible}' "
+                     f"field in {self.path} - "
+                     f"should be a string, not {type(compatible).__name__}")
+        elif require_compatible:
+            _err(f"missing 'compatible' in {self.path}")
+
+        if "description" in raw:
+            description = raw["description"]
+            if not isinstance(description, str) or not description:
+                _err(f"malformed or empty 'description' in {self.path}")
+        elif require_description:
+            _err(f"missing 'description' in {self.path}")
+
+        # Allowed top-level keys. The 'include' key should have been
+        # removed by _load_raw() already.
+        ok_top = {"description", "compatible", "bus", "on-bus",
+                  "properties", "child-binding"}
+
+        # Descriptive errors for legacy bindings.
+        legacy_errors = {
+            "#cells": "expected *-cells syntax",
+            "child": "use 'bus: <bus>' instead",
+            "child-bus": "use 'bus: <bus>' instead",
+            "parent": "use 'on-bus: <bus>' instead",
+            "parent-bus": "use 'on-bus: <bus>' instead",
+            "sub-node": "use 'child-binding' instead",
+            "title": "use 'description' instead",
+        }
+
+        for key in raw:
+            if key in legacy_errors:
+                _err(f"legacy '{key}:' in {self.path}, {legacy_errors[key]}")
+
+            if key not in ok_top and not key.endswith("-cells"):
+                _err(f"unknown key '{key}' in {self.path}, "
+                     "expected one of {', '.join(ok_top)}, or *-cells")
+
+        for bus_key in "bus", "on-bus":
+            if bus_key in raw and \
+               not isinstance(raw[bus_key], str):
+                _err(f"malformed '{bus_key}:' value in {self.path}, "
+                     "expected string")
+
+        self._check_properties()
+
+        for key, val in raw.items():
+            if key.endswith("-cells"):
+                if not isinstance(val, list) or \
+                   not all(isinstance(elem, str) for elem in val):
+                    _err(f"malformed '{key}:' in {self.path}, "
+                         "expected a list of strings")
+
+    def _check_properties(self):
+        # _check() helper for checking the contents of 'properties:'.
+
+        raw = self.raw
+
+        if "properties" not in raw:
+            return
+
+        ok_prop_keys = {"description", "type", "required",
+                        "enum", "const", "default", "deprecated"}
+
+        for prop_name, options in raw["properties"].items():
+            for key in options:
+                if key not in ok_prop_keys:
+                    _err(f"unknown setting '{key}' in "
+                         f"'properties: {prop_name}: ...' in {self.path}, "
+                         f"expected one of {', '.join(ok_prop_keys)}")
+
+            _check_prop_type_and_default(
+                prop_name, options.get("type"),
+                options.get("default"),
+                self.path)
+
+            for true_false_opt in ["required", "deprecated"]:
+                if true_false_opt in options:
+                    option = options[true_false_opt]
+                    if not isinstance(option, bool):
+                        _err(f"malformed '{true_false_opt}:' setting '{option}' "
+                             f"for '{prop_name}' in 'properties' in {self.path}, "
+                             "expected true/false")
+
+            if options.get("deprecated") and options.get("required"):
+                _err(f"'{prop_name}' in 'properties' in {self.path} should not "
+                      "have both 'deprecated' and 'required' set")
+
+            if "description" in options and \
+               not isinstance(options["description"], str):
+                _err("missing, malformed, or empty 'description' for "
+                     f"'{prop_name}' in 'properties' in {self.path}")
+
+            if "enum" in options and not isinstance(options["enum"], list):
+                _err(f"enum in {self.path} for property '{prop_name}' "
+                     "is not a list")
+
+            if "const" in options and not isinstance(options["const"],
+                                                     (int, str)):
+                _err(f"const in {self.path} for property '{prop_name}' "
+                     "is not a scalar")
+
+
+def bindings_from_paths(yaml_paths, ignore_errors=False):
+    """
+    Get a list of Binding objects from the yaml files 'yaml_paths'.
+
+    If 'ignore_errors' is True, YAML files that cause an EDTError when
+    loaded are ignored. (No other exception types are silenced.)
+    """
+
+    ret = []
+    fname2path = {os.path.basename(path): path for path in yaml_paths}
+    for path in yaml_paths:
+        try:
+            ret.append(Binding(path, fname2path))
+        except EDTError:
+            if ignore_errors:
+                continue
+            raise
+
+    return ret
+
+class PropertySpec:
+    """
+    Represents a "property specification", i.e. the description of a
+    property provided by a binding file, like its type and description.
+
+    These attributes are available on PropertySpec objects:
+
+    binding:
+      The Binding object which defined this property.
+
+    name:
+      The property's name.
+
+    path:
+      The file where this property was defined. In case a binding includes
+      other bindings, this is the file where the property was last modified.
+
+    type:
+      The type of the property as a string, as given in the binding.
+
+    description:
+      The free-form description of the property as a string, or None.
+
+    enum:
+      A list of values the property may take as given in the binding, or None.
+
+    enum_tokenizable:
+      True if enum is not None and all the values in it are tokenizable;
+      False otherwise.
+
+      A property must have string type and an "enum:" in its binding to be
+      tokenizable. Additionally, the "enum:" values must be unique after
+      converting all non-alphanumeric characters to underscores (so "foo bar"
+      and "foo_bar" in the same "enum:" would not be tokenizable).
+
+    enum_upper_tokenizable:
+      Like 'enum_tokenizable', with the additional restriction that the
+      "enum:" values must be unique after uppercasing and converting
+      non-alphanumeric characters to underscores.
+
+    const:
+      The property's constant value as given in the binding, or None.
+
+    default:
+      The property's default value as given in the binding, or None.
+
+    deprecated:
+      True if the property is deprecated; False otherwise.
+
+    required:
+      True if the property is marked required; False otherwise.
+    """
+
+    def __init__(self, name, binding):
+        self.binding = binding
+        self.name = name
+        self._raw = self.binding.raw["properties"][name]
+
+    def __repr__(self):
+        return f"<PropertySpec {self.name} type '{self.type}'>"
+
+    @property
+    def path(self):
+        "See the class docstring"
+        return self.binding.path
+
+    @property
+    def type(self):
+        "See the class docstring"
+        return self._raw["type"]
+
+    @property
+    def description(self):
+        "See the class docstring"
+        return self._raw.get("description")
+
+    @property
+    def enum(self):
+        "See the class docstring"
+        return self._raw.get("enum")
+
+    @property
+    def enum_tokenizable(self):
+        "See the class docstring"
+        if not hasattr(self, '_enum_tokenizable'):
+            if self.type != 'string' or self.enum is None:
+                self._enum_tokenizable = False
+            else:
+                # Saving _as_tokens here lets us reuse it in
+                # enum_upper_tokenizable.
+                self._as_tokens = [re.sub(_NOT_ALPHANUM_OR_UNDERSCORE,
+                                          '_', value)
+                                   for value in self.enum]
+                self._enum_tokenizable = (len(self._as_tokens) ==
+                                          len(set(self._as_tokens)))
+
+        return self._enum_tokenizable
+
+    @property
+    def enum_upper_tokenizable(self):
+        "See the class docstring"
+        if not hasattr(self, '_enum_upper_tokenizable'):
+            if not self.enum_tokenizable:
+                self._enum_upper_tokenizable = False
+            else:
+                self._enum_upper_tokenizable = \
+                    (len(self._as_tokens) ==
+                     len(set(x.upper() for x in self._as_tokens)))
+        return self._enum_upper_tokenizable
+
+    @property
+    def const(self):
+        "See the class docstring"
+        return self._raw.get("const")
+
+    @property
+    def default(self):
+        "See the class docstring"
+        return self._raw.get("default")
+
+    @property
+    def required(self):
+        "See the class docstring"
+        return self._raw.get("required", False)
+
+    @property
+    def deprecated(self):
+        "See the class docstring"
+        return self._raw.get("deprecated", False)
+
 class EDTError(Exception):
     "Exception raised for devicetree- and binding-related errors"
-
-
-#
-# Public global functions
-#
-
-
-def spi_dev_cs_gpio(node):
-    # Returns an SPI device's GPIO chip select if it exists, as a
-    # ControllerAndData instance, and None otherwise. See
-    # Documentation/devicetree/bindings/spi/spi-bus.txt in the Linux kernel.
-
-    if not (node.bus == "spi" and node.parent and
-            "cs-gpios" in node.parent.props):
-        return None
-
-    if not node.regs:
-        _err("{!r} needs a 'reg' property, to look up the chip select index "
-             "for SPI".format(node))
-
-    parent_cs_lst = node.parent.props["cs-gpios"].val
-
-    # cs-gpios is indexed by the unit address
-    cs_index = node.regs[0].addr
-    if cs_index >= len(parent_cs_lst):
-        _err("index from 'regs' in {!r} ({}) is >= number of cs-gpios "
-             "in {!r} ({})".format(
-                 node, cs_index, node.parent, len(parent_cs_lst)))
-
-    return parent_cs_lst[cs_index]
 
 
 #
@@ -1462,24 +1942,6 @@ def _binding_paths(bindings_dirs):
                     binding_paths.append(os.path.join(root, filename))
 
     return binding_paths
-
-
-def _binding_bus(binding):
-    # Returns the bus specified by 'parent-bus: ...' in the binding (or the
-    # legacy 'parent: bus: ...'), or None if missing
-
-    if not binding:
-        return None
-
-    if "parent-bus" in binding:
-        return binding["parent-bus"]
-
-    # Legacy key
-    if "parent" in binding:
-        # _check_binding() has checked that the "bus" key exists
-        return binding["parent"]["bus"]
-
-    return None
 
 
 def _binding_inc_error(msg):
@@ -1521,7 +1983,7 @@ def _merge_props(to_dict, from_dict, parent, binding_path, check_required):
                      to_dict[prop]))
         elif prop == "required":
             # Need a separate check here, because this code runs before
-            # _check_binding()
+            # Binding._check()
             if not (isinstance(from_dict["required"], bool) and
                     isinstance(to_dict["required"], bool)):
                 _err("malformed 'required:' setting for '{}' in 'properties' "
@@ -1529,10 +1991,6 @@ def _merge_props(to_dict, from_dict, parent, binding_path, check_required):
 
             # 'required: true' takes precedence
             to_dict["required"] = to_dict["required"] or from_dict["required"]
-        elif prop == "category":
-            # Legacy property key. 'category: required' takes precedence.
-            if "required" in (to_dict["category"], from_dict["category"]):
-                to_dict["category"] = "required"
 
 
 def _bad_overwrite(to_dict, from_dict, prop, check_required):
@@ -1550,12 +2008,6 @@ def _bad_overwrite(to_dict, from_dict, prop, check_required):
         if not check_required:
             return False
         return from_dict[prop] and not to_dict[prop]
-
-    # Legacy property key
-    if prop == "category":
-        if not check_required:
-            return False
-        return from_dict[prop] == "required" and to_dict[prop] == "optional"
 
     return True
 
@@ -1575,10 +2027,9 @@ def _binding_include(loader, node):
     _binding_inc_error("unrecognised node type in !include statement")
 
 
-def _check_prop_type_and_default(prop_name, prop_type, required, default,
-                                 binding_path):
-    # _check_binding() helper. Checks 'type:' and 'default:' for the property
-    # named 'prop_name'
+def _check_prop_type_and_default(prop_name, prop_type, default, binding_path):
+    # Binding._check_properties() helper. Checks 'type:' and 'default:' for the
+    # property named 'prop_name'
 
     if prop_type is None:
         _err("missing 'type:' for '{}' in 'properties' in {}"
@@ -1586,7 +2037,7 @@ def _check_prop_type_and_default(prop_name, prop_type, required, default,
 
     ok_types = {"boolean", "int", "array", "uint8-array", "string",
                 "string-array", "phandle", "phandles", "phandle-array",
-                "compound"}
+                "path", "compound"}
 
     if prop_type not in ok_types:
         _err("'{}' in 'properties:' in {} has unknown type '{}', expected one "
@@ -1604,13 +2055,8 @@ def _check_prop_type_and_default(prop_name, prop_type, required, default,
     if default is None:
         return
 
-    if required:
-        _err("'default:' for '{}' in 'properties:' in {} is meaningless in "
-             "combination with 'required: true'"
-             .format(prop_name, binding_path))
-
     if prop_type in {"boolean", "compound", "phandle", "phandles",
-                     "phandle-array"}:
+                     "phandle-array", "path"}:
         _err("'default:' can't be combined with 'type: {}' for '{}' in "
              "'properties:' in {}".format(prop_type, prop_name, binding_path))
 
@@ -1671,7 +2117,12 @@ def _translate(addr, node):
     # Number of cells for one translation 3-tuple in 'ranges'
     entry_cells = child_address_cells + parent_address_cells + child_size_cells
 
-    for raw_range in _slice(node.parent, "ranges", 4*entry_cells):
+    for raw_range in _slice(node.parent, "ranges", 4*entry_cells,
+                            "4*(<#address-cells> (= {}) + "
+                            "<#address-cells for parent> (= {}) + "
+                            "<#size-cells> (= {}))"
+                            .format(child_address_cells, parent_address_cells,
+                                    child_size_cells)):
         child_addr = to_num(raw_range[:4*child_address_cells])
         raw_range = raw_range[4*child_address_cells:]
 
@@ -1711,10 +2162,13 @@ def _add_names(node, names_ident, objs):
                          len(names), len(objs)))
 
         for obj, name in zip(objs, names):
+            if obj is None:
+                continue
             obj.name = name
     else:
         for obj in objs:
-            obj.name = None
+            if obj is not None:
+                obj.name = None
 
 
 def _interrupt_parent(node):
@@ -1751,7 +2205,8 @@ def _interrupts(node):
         interrupt_cells = _interrupt_cells(iparent)
 
         return [_map_interrupt(node, iparent, raw)
-                for raw in _slice(node, "interrupts", 4*interrupt_cells)]
+                for raw in _slice(node, "interrupts", 4*interrupt_cells,
+                                  "4*<#interrupt-cells>")]
 
     return []
 
@@ -1981,8 +2436,11 @@ def _phandle_val_list(prop, n_cells_name):
     #   The <name> part of the #<name>-cells property to look for on the nodes
     #   the phandles point to, e.g. "gpio" for #gpio-cells.
     #
-    # Returns a list of (<node>, <value>) tuples, where <node> is the node
-    # pointed at by <phandle>.
+    # Returns a list[Optional[tuple]].
+    #
+    # Each tuple in the list is a (<node>, <value>) pair, where <node>
+    # is the node pointed at by <phandle>. If <phandle> does not refer
+    # to a node, the entire list element is None.
 
     full_n_cells_name = "#{}-cells".format(n_cells_name)
 
@@ -1998,7 +2456,10 @@ def _phandle_val_list(prop, n_cells_name):
 
         node = prop.node.dt.phandle2node.get(phandle)
         if not node:
-            _err("bad phandle in " + repr(prop))
+            # Unspecified phandle-array element. This is valid; a 0
+            # phandle value followed by no cells is an empty element.
+            res.append(None)
+            continue
 
         if full_n_cells_name not in node.props:
             _err("{!r} lacks {}".format(node, full_n_cells_name))
@@ -2040,15 +2501,19 @@ def _interrupt_cells(node):
     return node.props["#interrupt-cells"].to_num()
 
 
-def _slice(node, prop_name, size):
+def _slice(node, prop_name, size, size_hint):
     # Splits node.props[prop_name].value into 'size'-sized chunks, returning a
     # list of chunks. Raises EDTError if the length of the property is not
-    # evenly divisible by 'size'.
+    # evenly divisible by 'size'. 'size_hint' is a string shown on errors that
+    # gives a hint on how 'size' was calculated.
 
     raw = node.props[prop_name].value
     if len(raw) % size:
         _err("'{}' property in {!r} has length {}, which is not evenly "
-             "divisible by {}".format(prop_name, node, len(raw), size))
+             "divisible by {} (= {}). Note that #*-cells "
+             "properties come either from the parent node or from the "
+             "controller (in the case of 'interrupts')."
+             .format(prop_name, node, len(raw), size, size_hint))
 
     return [raw[i:i + size] for i in range(0, len(raw), size)]
 
@@ -2060,7 +2525,8 @@ def _check_dt(dt):
 
     # Check that 'status' has one of the values given in the devicetree spec.
 
-    ok_status = {"okay", "disabled", "reserved", "fail", "fail-sss"}
+    # Accept "ok" for backwards compatibility
+    ok_status = {"ok", "okay", "disabled", "reserved", "fail", "fail-sss"}
 
     for node in dt.node_iter():
         if "status" in node.props:
@@ -2087,6 +2553,11 @@ def _check_dt(dt):
 def _err(msg):
     raise EDTError(msg)
 
+# Logging object
+_LOG = logging.getLogger(__name__)
+
+# Regular expression for non-alphanumeric-or-underscore characters.
+_NOT_ALPHANUM_OR_UNDERSCORE = re.compile(r'\W', re.ASCII)
 
 # Custom PyYAML binding loader class to avoid modifying yaml.Loader directly,
 # which could interfere with YAML loading in clients
@@ -2108,3 +2579,50 @@ _BindingLoader.add_constructor("!include", _binding_include)
 _BindingLoader.add_constructor(
     yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
     lambda loader, node: OrderedDict(loader.construct_pairs(node)))
+
+#
+# "Default" binding for properties which are defined by the spec.
+#
+# Zephyr: do not change the _DEFAULT_PROP_TYPES keys without
+# updating the documentation for the DT_PROP() macro in
+# include/devicetree.h.
+#
+
+_DEFAULT_PROP_TYPES = {
+    "compatible": "string-array",
+    "status": "string",
+    "reg": "array",
+    "reg-names": "string-array",
+    "label": "string",
+    "interrupts": "array",
+    "interrupts-extended": "compound",
+    "interrupt-names": "string-array",
+    "interrupt-controller": "boolean",
+}
+
+_STATUS_ENUM = "ok okay disabled reserved fail fail-sss".split()
+
+def _raw_default_property_for(name):
+    ret = {
+        'type': _DEFAULT_PROP_TYPES[name],
+        'required': False,
+    }
+    if name == 'status':
+        ret['enum'] = _STATUS_ENUM
+    return ret
+
+_DEFAULT_PROP_BINDING = Binding(
+    None, {},
+    raw={
+        'properties': {
+            name: _raw_default_property_for(name)
+            for name in _DEFAULT_PROP_TYPES
+        },
+    },
+    require_compatible=False, require_description=False,
+)
+
+_DEFAULT_PROP_SPECS = {
+    name: PropertySpec(name, _DEFAULT_PROP_BINDING)
+    for name in _DEFAULT_PROP_TYPES
+}

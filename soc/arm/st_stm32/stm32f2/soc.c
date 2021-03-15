@@ -14,7 +14,7 @@
 #include <init.h>
 #include <soc.h>
 #include <arch/cpu.h>
-#include <arch/arm/cortex_m/cmsis.h>
+#include <arch/arm/aarch32/cortex_m/cmsis.h>
 #include <linker/linker-defs.h>
 #include <string.h>
 
@@ -26,9 +26,9 @@
  *
  * @return 0
  */
-static int stm32f2_init(struct device *arg)
+static int stm32f2_init(const struct device *arg)
 {
-	u32_t key;
+	uint32_t key;
 
 	ARG_UNUSED(arg);
 

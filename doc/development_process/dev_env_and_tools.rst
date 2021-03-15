@@ -105,14 +105,14 @@ Security
 Changes that appear to have an impact to the overall security of the system need
 to be reviewed by a security expert from the security working group.
 
-TSC
-++++
+TSC and Working Groups
+++++++++++++++++++++++
 
 Changes that introduce new features or functionality or change the way the
 overall system works need to be reviewed by the TSC or the responsible Working
-Group. For example for API changes, the API working group needs to be consulted
-and made aware of such changes.
-
+Group. For example for :ref:`stable API changes <stable_api_changes>`, the
+proposal needs to be presented in the API meeting so that the relevant
+stakeholders are made aware of the change.
 
 A Pull-Request should have an Assignee
 =======================================
@@ -198,9 +198,9 @@ Closing Stale Issues and Pull Requests
 Continuous Integration
 ***********************
 
-All changes submitted to GitHub are subject to sanity tests that are run on
+All changes submitted to GitHub are subject to tests that are run on
 emulated platforms and architectures to identify breakage and regressions that
-can be immediately identified. Sanity testing additionally performs build tests
+can be immediately identified. Testing using Twister additionally performs build tests
 of all boards and platforms. Documentation changes are also verified
 through review and build testing to verify doc generation will be successful.
 
@@ -210,15 +210,34 @@ Developers are expected to fix issues and rework their patches and submit again.
 
 The CI infrastructure currently runs the following tests:
 
-- Run ''checkpatch'' for code style issues (can vote -1 on errors)
+- Run ''checkpatch'' for code style issues (can vote -1 on errors; see note)
 - Gitlint: Git commit style based on project requirements
 - License Check: Check for conflicting licenses
-- Run ''sanitycheck'' script
+- Run ''twister'' script
 
   - Run kernel tests in QEMU (can vote -1 on errors)
   - Build various samples for different boards (can vote -1 on errors)
 
 - Verify documentation builds correctly.
+
+.. note::
+
+   ''checkpatch'' is a Perl script that uses regular expressions to
+   extract information that requires a C language parser to process
+   accurately.  As such it sometimes issues false positives.  Known
+   cases include constructs like::
+
+      static uint8_t __aligned(PAGE_SIZE) page_pool[PAGE_SIZE * POOL_PAGES];
+      IOPCTL_Type *base = config->base;
+
+   Both lines produce a diagnostic regarding spaces around the ``*``
+   operator: the first is misidentifed as a pointer type declaration
+   that would be correct as ``PAGE_SIZE *POOL_PAGES`` while the second
+   is misidentified as a multiplication expression that would be correct
+   as ``IOPCTL_Type * base``.
+
+   Maintainers can override the -1 in cases where the CI infrastructure
+   gets the wrong answer.
 
 
 .. _gh_labels:
@@ -277,6 +296,16 @@ Description    The issue is to be discussed in the following
 =============  ===============================================================
 
 .. _`dev-review/TSC meeting`: https://github.com/zephyrproject-rtos/zephyr/wiki/Zephyr-Committee-and-Working-Group-Meetings
+
+Stable API changes
+==================
+
+=============  ===============================================================
+Labels         ``Stable API Change``
+Applicable to  PRs  and issues
+Description    The issue or PR describes a change to a stable API. See
+               additional information in :ref:`stable_api_changes`
+=============  ===============================================================
 
 Minimum PR review time
 ======================

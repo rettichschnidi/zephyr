@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-find_program(CMAKE_LINKER     ${CROSS_COMPILE}ld      PATH ${TOOLCHAIN_HOME} NO_DEFAULT_PATH)
+find_program(CMAKE_LINKER     ${CROSS_COMPILE}ld      PATHS ${TOOLCHAIN_HOME} NO_DEFAULT_PATH)
 
 set_ifndef(LINKERFLAGPREFIX -Wl)
 
@@ -51,13 +51,14 @@ macro(configure_linker_script linker_script_gen linker_pass_define)
     -o ${linker_script_gen}
     VERBATIM
     WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+    COMMAND_EXPAND_LISTS
   )
 endmacro()
 
 # Force symbols to be entered in the output file as undefined symbols
 function(toolchain_ld_force_undefined_symbols)
   foreach(symbol ${ARGN})
-    zephyr_link_libraries(-u${symbol})
+    zephyr_link_libraries(${LINKERFLAGPREFIX},-u,${symbol})
   endforeach()
 endfunction()
 

@@ -33,7 +33,7 @@ this, check out articles such as `Why choose Apache 2.0 licensing`_ and
 `Top 10 Apache License Questions Answered`_).
 
 .. _Why choose Apache 2.0 licensing:
-   https://www.zephyrproject.org/about/#faq
+   https://www.zephyrproject.org/faqs/#1571346989065-9216c551-f523
 
 .. _Top 10 Apache License Questions Answered:
    https://www.whitesourcesoftware.com/whitesource-blog/top-10-apache-license-questions-answered/
@@ -130,6 +130,22 @@ to add the sign-off you can also amend a previous commit with the sign-off by
 running ``git commit --amend -s``. If you've pushed your changes to GitHub
 already you'll need to force push your branch after this with ``git push -f``.
 
+Notes
+=====
+
+Any contributions made as part of submitted pull requests are considered free
+for the Project to use. Developers are permitted to cherry-pick patches that
+are included in pull requests submitted by other contributors. It is expected
+that
+
+* the content of the patches will not be substantially modified,
+* the cherry-picked commits or portions of a commit shall preserve the original
+  sign-off messages and the author identity.
+
+:ref:`modifying_contributions` describes additional recommended policies
+around working with contributions submitted by other developers.
+
+
 Prerequisites
 *************
 
@@ -151,7 +167,7 @@ on https://github.com and have Git tools available on your development system.
    (Linux, macOS, and Windows) but some of the tools used in the sections below
    are only available on Linux and macOS. On Windows, instead of running these
    tools yourself, you will need to rely on the Continuous Integration (CI)
-   service ``shippable``, which runs automatically on GitHub when you submit
+   service ``buildkite``, which runs automatically on GitHub when you submit
    your Pull Request (PR).  You can see any failure results in the Shippable
    details link near the end of the PR conversation list. See
    `Continuous Integration`_ for more information
@@ -205,11 +221,11 @@ every Pull Request (PR) in order to verify several aspects of the PR:
 
 * Git commit formatting
 * Coding Style
-* Sanity Check builds for multiple architectures and boards
+* Twister builds for multiple architectures and boards
 * Documentation build to verify any doc changes
 
-CI is run on the ``shippable`` cloud service and it uses the same tools
-described in the `Contribution Tools`_ section.
+CI is run both on the ``buildkite`` cloud service and Github Actions and it uses
+the same tools described in the `Contribution Tools`_ section.
 The CI results must be green indicating "All checks have passed" before
 the Pull Request can be merged.  CI is run when the PR is created, and
 again every time the PR is modified with a commit.
@@ -222,8 +238,9 @@ of the run you will see:
 * "All checks have failed"
 
 In case of failure you can click on the "Details" link presented below the
-failure message in order to navigate to ``shippable`` and inspect the results.
-Once you click on the link you will be taken to the ``shippable`` summary
+failure message in order to navigate to ``buildkite`` or ``Github Actions``
+and inspect the results.
+Once you click on the link you will be taken to the ``buildkite`` summary
 results page where a table with all the different builds will be shown. To see
 what build or test failed click on the row that contains the failed (i.e.
 non-green) build and then click on the "Tests" tab to see the console output
@@ -231,8 +248,15 @@ messages indicating the failure.
 
 The `builds@lists.zephyrproject.org mailing list
 <https://lists.zephyrproject.org/g/builds>`_
-archives the CI (shippable) nightly build results.
+archives the CI (buildkite) nightly build results.
 
+Coding Guidelines
+*****************
+
+Beyond the :ref:`coding_style` that Zephyr enforces for all code that is
+submitted for inclusion, the project targets compliance with a series of
+coding guidelines. Refer to the :ref:`coding_guidelines` section of the
+documentation for additional details.
 
  .. _Contribution Tools:
 
@@ -270,23 +294,23 @@ Note, gitlint only checks HEAD (the most recent commit), so you should run it
 after each commit, or use the ``--commits`` option to specify a commit range
 covering all the development patches to be submitted.
 
-sanitycheck
-===========
+twister
+=======
 
 .. note::
-   sanitycheck does not currently run on Windows.
+   twister does not currently run on Windows.
 
 To verify that your changes did not break any tests or samples, please run the
-``sanitycheck`` script locally before submitting your pull request to GitHub. To
+``twister`` script locally before submitting your pull request to GitHub. To
 run the same tests the CI system runs, follow these steps from within your
 local Zephyr source working directory:
 
 .. code-block:: console
 
     source zephyr-env.sh
-    ./scripts/sanitycheck
+    ./scripts/twister
 
-The above will execute the basic sanitycheck script, which will run various
+The above will execute the basic twister script, which will run various
 kernel tests using the QEMU emulator.  It will also do some build tests on
 various samples with advanced features that can't run in QEMU.
 
@@ -320,6 +344,8 @@ On Linux systems, you can install uncrustify with
 
 For Windows installation instructions see the `sourceforge listing for
 uncrustify <https://sourceforge.net/projects/uncrustify>`_.
+
+.. _coding_style:
 
 Coding Style
 ************
@@ -375,7 +401,7 @@ before pushing on zephyr repo. To do this, make the file
     while read local_ref local_sha remote_ref remote_sha
     do
         args="$remote $url $local_ref $local_sha $remote_ref $remote_sha"
-        exec ${ZEPHYR_BASE}/series-push-hook.sh $args
+        exec ${ZEPHYR_BASE}/scripts/series-push-hook.sh $args
     done
 
     exit 0
@@ -449,7 +475,7 @@ workflow here:
      git checkout -b fix_out_of_date_patch origin/net
 
 #. Make changes, test locally, change, test, test again, ...  (Check out the
-   prior chapter on `sanitycheck`_ as well).
+   prior chapter on `twister`_ as well).
 
 #. When things look good, start the pull request process by adding your changed
    files::
@@ -691,10 +717,15 @@ Contributing non-Apache 2.0 licensed components
 
 Importing code into the Zephyr OS from other projects that use a license
 other than the Apache 2.0 license needs to be fully understood in
-context and approved by the `Zephyr governing board`_.
+context and approved by the `Zephyr governing board`_. The board will
+automatically reject licenses that have not been approved by the `Open Source
+Initiative (OSI)`_.
 
 .. _Zephyr governing board:
-   https://www.zephyrproject.org/about/organization
+   https://www.zephyrproject.org/governance/
+
+.. _Open Source Initiative (OSI):
+   https://opensource.org/licenses/alphabetical
 
 By carefully reviewing potential contributions and also enforcing a
 :ref:`DCO` for contributed code, we ensure that
@@ -766,6 +797,12 @@ Code component README template
 Contribution Roles and Responsibilities
 ***************************************
 
+.. toctree::
+   :maxdepth: 1
+
+   modifying_contributions.rst
+   project_roles.rst
+
 The Zephyr project defines a development process workflow using GitHub
 **Issues** to track feature, enhancement, and bug reports together with GitHub
 **Pull Requests** (PRs) for submitting and reviewing changes.  Zephyr
@@ -780,3 +817,6 @@ submissions and for followup questions and clarifications.  Read about the
 project's :ref:`development processes and tools <dev-environment-and-tools>`
 and specifics about :ref:`review timelines <review_time>` to learn about the
 project's goals and guidelines for our active developer community.
+
+:ref:`project_roles` describes in detail the Zephyr project roles and associated permissions
+with respect to the development process workflow.

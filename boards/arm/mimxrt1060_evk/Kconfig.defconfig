@@ -13,44 +13,33 @@ choice CODE_LOCATION
 	default CODE_FLEXSPI
 endchoice
 
-choice DATA_LOCATION
-	default DATA_SEMC
-endchoice
+config DISK_ACCESS_USDHC1
+	default y
+	depends on DISK_ACCESS_USDHC
 
-if GPIO_MCUX_IGPIO
+config I2C
+	default y if KSCAN
 
-config GPIO_MCUX_IGPIO_1
+config KSCAN
+	default y if LVGL
+
+if KSCAN
+
+config KSCAN_FT5336
 	default y
 
-config GPIO_MCUX_IGPIO_5
+config KSCAN_FT5336_INTERRUPT
 	default y
 
-endif # GPIO_MCUX_IGPIO
+config KSCAN_INIT_PRIORITY
+	default 60
 
-if I2C_MCUX_LPI2C
-
-config I2C_1
-	default y
-
-endif # I2C_MCUX_LPI2C
-
-if UART_MCUX_LPUART
-
-config UART_MCUX_LPUART_1
-	default y
-
-config UART_MCUX_LPUART_3
-	default y if BT_UART
-
-endif # UART_MCUX_LPUART
+endif # KSCAN
 
 if NETWORKING
 
 config NET_L2_ETHERNET
 	default y
-
-config ETH_MCUX_0
-	default y if NET_L2_ETHERNET
 
 endif # NETWORKING
 
@@ -59,10 +48,16 @@ if LVGL
 config LVGL_DISPLAY_DEV_NAME
 	default "ELCDIF_1"
 
-config LVGL_HOR_RES
+config LVGL_POINTER_KSCAN
+	default y
+
+config LVGL_POINTER_KSCAN_DEV_NAME
+	default "FT5336"
+
+config LVGL_HOR_RES_MAX
 	default 480
 
-config LVGL_VER_RES
+config LVGL_VER_RES_MAX
 	default 272
 
 config LVGL_VDB_SIZE

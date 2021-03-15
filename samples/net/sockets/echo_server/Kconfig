@@ -22,6 +22,11 @@ config NET_SAMPLE_IFACE2_MY_IPV4_ADDR
 	help
 	  The value depends on your network setup.
 
+config NET_SAMPLE_IFACE2_MY_IPV4_NETMASK
+	string "My IPv4 netmask for second interface"
+	help
+	  The value depends on your network setup.
+
 config NET_SAMPLE_IFACE2_VLAN_TAG
 	int "VLAN tag for second interface"
 	default 100
@@ -41,6 +46,11 @@ config NET_SAMPLE_IFACE3_MY_IPV4_ADDR
 	help
 	  The value depends on your network setup.
 
+config NET_SAMPLE_IFACE3_MY_IPV4_NETMASK
+	string "My IPv4 netmask for third interface"
+	help
+	  The value depends on your network setup.
+
 config NET_SAMPLE_IFACE3_VLAN_TAG
 	int "VLAN tag for third interface"
 	default 200
@@ -57,5 +67,12 @@ config NET_SAMPLE_PSK_HEADER_FILE
 	help
 	  Name of a header file containing a
 	  pre-shared key.
+
+config NET_SAMPLE_CERTS_WITH_SC
+	bool "Signed certificates"
+	depends on NET_SOCKETS_SOCKOPT_TLS
+	help
+	  Enable this flag, if you are interested to run this
+	  application with signed certificates and keys.
 
 source "Kconfig.zephyr"

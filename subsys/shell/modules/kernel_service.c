@@ -14,11 +14,12 @@
 #include <string.h>
 #include <device.h>
 #include <drivers/timer/system_timer.h>
+#include <kernel.h>
 
 static int cmd_kernel_version(const struct shell *shell,
 			      size_t argc, char **argv)
 {
-	u32_t version = sys_kernel_version_get();
+	uint32_t version = sys_kernel_version_get();
 
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
@@ -50,20 +51,22 @@ static int cmd_kernel_cycles(const struct shell *shell,
 	return 0;
 }
 
-#if defined(CONFIG_INIT_STACKS) && defined(CONFIG_THREAD_MONITOR) \
-				&& defined(CONFIG_THREAD_STACK_INFO)
+#if defined(CONFIG_INIT_STACKS) && defined(CONFIG_THREAD_STACK_INFO) && \
+	defined(CONFIG_THREAD_MONITOR)
 static void shell_tdata_dump(const struct k_thread *cthread, void *user_data)
 {
 	struct k_thread *thread = (struct k_thread *)cthread;
 	const struct shell *shell = (const struct shell *)user_data;
-	unsigned int pcnt, unused = 0U;
-	unsigned int size = thread->stack_info.size;
+	unsigned int pcnt;
+	size_t unused;
+	size_t size = thread->stack_info.size;
 	const char *tname;
+	int ret;
 
-	unused = stack_unused_space_get((char *)thread->stack_info.start, size);
-
-	/* Calculate the real size reserved for the stack */
-	pcnt = ((size - unused) * 100U) / size;
+#ifdef CONFIG_THREAD_RUNTIME_STATS
+	k_thread_runtime_stats_t rt_stats_thread;
+	k_thread_runtime_stats_t rt_stats_all;
+#endif
 
 	tname = k_thread_name_get(thread);
 
@@ -75,9 +78,58 @@ static void shell_tdata_dump(const struct k_thread *cthread, void *user_data)
 		      thread->base.user_options,
 		      thread->base.prio,
 		      thread->base.timeout.dticks);
-	shell_print(shell, "\tstate: %s", k_thread_state_str(thread));
-	shell_print(shell, "\tstack size %u, unused %u, usage %u / %u (%u %%)\n",
-		      size, unused, size - unused, size, pcnt);
+	shell_print(shell, "\tstate: %s, entry: %p", k_thread_state_str(thread),
+		    thread->entry);
+
+#ifdef CONFIG_THREAD_RUNTIME_STATS
+	ret = 0;
+
+	if (k_thread_runtime_stats_get(thread, &rt_stats_thread) != 0) {
+		ret++;
+	};
+
+	if (k_thread_runtime_stats_all_get(&rt_stats_all) != 0) {
+		ret++;
+	}
+
+	if (ret == 0) {
+		pcnt = (rt_stats_thread.execution_cycles * 100U) /
+		       rt_stats_all.execution_cycles;
+
+		/*
+		 * z_prf() does not support %llu by default unless
+		 * CONFIG_MINIMAL_LIBC_LL_PRINTF=y. So do conditional
+		 * compilation to avoid blindly enabling this kconfig
+		 * so it won't increase RAM/ROM usage too much on 32-bit
+		 * targets.
+		 */
+#ifdef CONFIG_64BIT
+		shell_print(shell, "\tTotal execution cycles: %llu (%u %%)",
+			    rt_stats_thread.execution_cycles,
+			    pcnt);
+#else
+		shell_print(shell, "\tTotal execution cycles: %lu (%u %%)",
+			    (uint32_t)rt_stats_thread.execution_cycles,
+			    pcnt);
+#endif
+	} else {
+		shell_print(shell, "\tTotal execution cycles: ? (? %%)");
+	}
+#endif
+
+	ret = k_thread_stack_space_get(thread, &unused);
+	if (ret) {
+		shell_print(shell,
+			    "Unable to determine unused stack size (%d)\n",
+			    ret);
+	} else {
+		/* Calculate the real size reserved for the stack */
+		pcnt = ((size - unused) * 100U) / size;
+
+		shell_print(shell,
+			    "\tstack size %zu, unused %zu, usage %zu / %zu (%u %%)\n",
+			    size, unused, size - unused, size, pcnt);
+	}
 
 }
 
@@ -95,12 +147,22 @@ static int cmd_kernel_threads(const struct shell *shell,
 
 static void shell_stack_dump(const struct k_thread *thread, void *user_data)
 {
-	unsigned int pcnt, unused = 0U;
-	unsigned int size = thread->stack_info.size;
+	const struct shell *shell = (const struct shell *)user_data;
+	unsigned int pcnt;
+	size_t unused;
+	size_t size = thread->stack_info.size;
 	const char *tname;
+	int ret;
+
+	ret = k_thread_stack_space_get(thread, &unused);
+	if (ret) {
+		shell_print(shell,
+			    "Unable to determine unused stack size (%d)\n",
+			    ret);
+		return;
+	}
 
 	tname = k_thread_name_get((struct k_thread *)thread);
-	unused = stack_unused_space_get((char *)thread->stack_info.start, size);
 
 	/* Calculate the real size reserved for the stack */
 	pcnt = ((size - unused) * 100U) / size;
@@ -112,12 +174,43 @@ static void shell_stack_dump(const struct k_thread *thread, void *user_data)
 		      size, unused, size - unused, size, pcnt);
 }
 
+extern K_KERNEL_STACK_ARRAY_DEFINE(z_interrupt_stacks, CONFIG_MP_NUM_CPUS,
+				   CONFIG_ISR_STACK_SIZE);
+
 static int cmd_kernel_stacks(const struct shell *shell,
 			     size_t argc, char **argv)
 {
+	uint8_t *buf;
+	size_t size, unused;
+
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 	k_thread_foreach(shell_stack_dump, (void *)shell);
+
+	/* Placeholder logic for interrupt stack until we have better
+	 * kernel support, including dumping arch-specific exception-related
+	 * stack buffers.
+	 */
+	for (int i = 0; i < CONFIG_MP_NUM_CPUS; i++) {
+		buf = Z_KERNEL_STACK_BUFFER(z_interrupt_stacks[i]);
+		size = K_KERNEL_STACK_SIZEOF(z_interrupt_stacks[i]);
+
+		unused = 0;
+		for (size_t i = 0; i < size; i++) {
+			if (buf[i] == 0xAAU) {
+				unused++;
+			} else {
+				break;
+			}
+		}
+
+		shell_print(shell,
+			"%p IRQ %02d     (real size %zu):\tunused %zu\tusage %zu / %zu (%zu %%)",
+			      &z_interrupt_stacks[i], i, size, unused,
+			      size - unused, size,
+			      ((size - unused) * 100U) / size);
+	}
+
 	return 0;
 }
 #endif
@@ -153,8 +246,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_kernel,
 #if defined(CONFIG_REBOOT)
 	SHELL_CMD(reboot, &sub_kernel_reboot, "Reboot.", NULL),
 #endif
-#if defined(CONFIG_INIT_STACKS) && defined(CONFIG_THREAD_MONITOR) \
-				&& defined(CONFIG_THREAD_STACK_INFO)
+#if defined(CONFIG_INIT_STACKS) && defined(CONFIG_THREAD_STACK_INFO) && \
+		defined(CONFIG_THREAD_MONITOR)
 	SHELL_CMD(stacks, NULL, "List threads stack usage.", cmd_kernel_stacks),
 	SHELL_CMD(threads, NULL, "List kernel threads.", cmd_kernel_threads),
 #endif

@@ -9,6 +9,7 @@ zephyr_library_compile_definitions_ifdef(
 zephyr_library_sources(
   net_core.c
   net_if.c
+  net_timeout.c
   utils.c
   )
 
@@ -42,11 +43,15 @@ zephyr_library_sources_ifdef(CONFIG_NET_SOCKETS_PACKET  connection.c
 zephyr_library_sources_ifdef(CONFIG_NET_SOCKETS_CAN  connection.c
                                                      canbus_socket.c)
 zephyr_library_sources_ifdef(CONFIG_NET_PROMISCUOUS_MODE promiscuous.c)
+
+if(CONFIG_NET_TCP_ISN_RFC6528)
+  zephyr_library_link_libraries_ifdef(CONFIG_MBEDTLS mbedTLS)
+endif()
 endif()
 
 zephyr_library_include_directories(
   ${ZEPHYR_BASE}/kernel/include
-  ${ZEPHYR_BASE}/arch/${ARCH}/include
+  ${ARCH_DIR}/${ARCH}/include
   )
 
 if(CONFIG_NET_SHELL)

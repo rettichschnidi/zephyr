@@ -48,6 +48,9 @@ config NET_IPV4_ACCEPT_ZERO_BROADCAST
 
 config NET_DHCPV4
 	bool "Enable DHCPv4 client"
+	select NET_MGMT
+	select NET_MGMT_EVENT
+	depends on NET_UDP
 
 config NET_DHCPV4_INITIAL_DELAY_MAX
 	int "Maximum time out for initial discover request"
@@ -63,6 +66,13 @@ config NET_IPV4_AUTO
 	depends on NET_ARP
 	help
 	  Enables IPv4 auto IP address configuration (see RFC 3927)
+
+config NET_IPV4_HDR_OPTIONS
+	bool "Enable IPv4 Header options support"
+	help
+	  Enables IPv4 header options support. Current support for only
+	  ICMPv4 Echo request. Only RecordRoute and Timestamp are handled.
+
 
 module = NET_IPV4
 module-dep = NET_LOG

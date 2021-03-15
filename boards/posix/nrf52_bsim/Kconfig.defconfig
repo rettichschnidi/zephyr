@@ -14,28 +14,15 @@ config OUTPUT_PRINT_MEMORY_USAGE
 config BOARD
 	default "nrf52_bsim"
 
-if BT
-
 config BT_CTLR
 	default y
-
-endif # BT
+	depends on BT
 
 if LOG
 
 # This board can reuse the native_posix logging backend
 config LOG_BACKEND_NATIVE_POSIX
 	default y if !SERIAL
-
-# For this board we can log immediately without any problem
-# Doing so will be nicer for debugging
-config LOG_IMMEDIATE
-	default y
-
-# If we set LOG_IMMEDIATE, there is no need to have the logging thread
-# running
-config LOG_PROCESS_THREAD
-	default n
 
 endif # LOG
 

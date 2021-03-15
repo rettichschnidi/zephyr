@@ -8,7 +8,7 @@ if(NOT EXISTS ${XTENSA_TOOLCHAIN_PATH})
   message(FATAL_ERROR "Nothing found at XTENSA_TOOLCHAIN_PATH: '${XTENSA_TOOLCHAIN_PATH}'")
 endif()
 
-set(TOOLCHAIN_HOME ${XTENSA_TOOLCHAIN_PATH}/XtDevTools/install/tools/$ENV{TOOLCHAIN_VER}/XtensaTools)
+set(TOOLCHAIN_HOME ${XTENSA_TOOLCHAIN_PATH}/$ENV{TOOLCHAIN_VER}/XtensaTools)
 
 set(COMPILER xcc)
 set(LINKER ld)
@@ -23,15 +23,22 @@ set(SYSROOT_DIR    ${TOOLCHAIN_HOME}/${SYSROOT_TARGET})
 # xt-xcc does not support -Og, so make it -O0
 set(OPTIMIZE_FOR_DEBUG_FLAG "-O0")
 
-set(CC xcc)
-set(C++ xc++)
+if($ENV{XCC_USE_CLANG})
+  set(CC clang)
+  set(C++ clang++)
+else()
+  set(CC xcc)
+  set(C++ xc++)
+
+  list(APPEND TOOLCHAIN_C_FLAGS
+    -imacros${ZEPHYR_BASE}/include/toolchain/xcc_missing_defs.h
+    )
+endif()
 
 set(NOSYSDEF_CFLAG "")
 
 list(APPEND TOOLCHAIN_C_FLAGS -fms-extensions)
 
-list(APPEND TOOLCHAIN_C_FLAGS
-  -imacros${ZEPHYR_BASE}/include/toolchain/xcc_missing_defs.h
-  )
-
 set(TOOLCHAIN_HAS_NEWLIB OFF CACHE BOOL "True if toolchain supports newlib")
+
+message(STATUS "Found toolchain: xcc (${XTENSA_TOOLCHAIN_PATH})")

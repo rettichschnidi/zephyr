@@ -8,9 +8,11 @@
  * https://www.st.com/resource/en/datasheet/lsm6dso.pdf
  */
 
+#define DT_DRV_COMPAT st_lsm6dso
+
 #include <kernel.h>
-#include <sensor.h>
-#include <gpio.h>
+#include <drivers/sensor.h>
+#include <drivers/gpio.h>
 #include <logging/log.h>
 
 #include "lsm6dso.h"
@@ -21,11 +23,11 @@ LOG_MODULE_DECLARE(LSM6DSO, CONFIG_SENSOR_LOG_LEVEL);
 /**
  * lsm6dso_enable_t_int - TEMP enable selected int pin to generate interrupt
  */
-static int lsm6dso_enable_t_int(struct device *dev, int enable)
+static int lsm6dso_enable_t_int(const struct device *dev, int enable)
 {
-	const struct lsm6dso_config *cfg = dev->config->config_info;
-	struct lsm6dso_data *lsm6dso = dev->driver_data;
-	lsm6dso_pin_int2_route_t int2_route;
+	const struct lsm6dso_config *cfg = dev->config;
+	struct lsm6dso_data *lsm6dso = dev->data;
+	lsm6dso_int2_ctrl_t int2_ctrl;
 
 	if (enable) {
 		union axis1bit16_t buf;
@@ -39,20 +41,20 @@ static int lsm6dso_enable_t_int(struct device *dev, int enable)
 		return -EIO;
 
 	lsm6dso_read_reg(lsm6dso->ctx, LSM6DSO_INT2_CTRL,
-			 (uint8_t *)&int2_route.int2_ctrl, 1);
+			 (uint8_t *)&int2_ctrl, 1);
 	int2_route.int2_ctrl.int2_drdy_temp = enable;
 	return lsm6dso_write_reg(lsm6dso->ctx, LSM6DSO_INT2_CTRL,
-				 (uint8_t *)&int2_route.int2_ctrl, 1);
+				 (uint8_t *)&int2_ctrl, 1);
 }
 #endif
 
 /**
  * lsm6dso_enable_xl_int - XL enable selected int pin to generate interrupt
  */
-static int lsm6dso_enable_xl_int(struct device *dev, int enable)
+static int lsm6dso_enable_xl_int(const struct device *dev, int enable)
 {
-	const struct lsm6dso_config *cfg = dev->config->config_info;
-	struct lsm6dso_data *lsm6dso = dev->driver_data;
+	const struct lsm6dso_config *cfg = dev->config;
+	struct lsm6dso_data *lsm6dso = dev->data;
 
 	if (enable) {
 		union axis3bit16_t buf;
@@ -63,32 +65,32 @@ static int lsm6dso_enable_xl_int(struct device *dev, int enable)
 
 	/* set interrupt */
 	if (cfg->int_pin == 1) {
-		lsm6dso_pin_int1_route_t int1_route;
+		lsm6dso_int1_ctrl_t int1_ctrl;
 
 		lsm6dso_read_reg(lsm6dso->ctx, LSM6DSO_INT1_CTRL,
-				 (uint8_t *)&int1_route.int1_ctrl, 1);
+				 (uint8_t *)&int1_ctrl, 1);
 
-		int1_route.int1_ctrl.int1_drdy_xl = enable;
+		int1_ctrl.int1_drdy_xl = enable;
 		return lsm6dso_write_reg(lsm6dso->ctx, LSM6DSO_INT1_CTRL,
-					 (uint8_t *)&int1_route.int1_ctrl, 1);
+					 (uint8_t *)&int1_ctrl, 1);
 	} else {
-		lsm6dso_pin_int2_route_t int2_route;
+		lsm6dso_int2_ctrl_t int2_ctrl;
 
 		lsm6dso_read_reg(lsm6dso->ctx, LSM6DSO_INT2_CTRL,
-				 (uint8_t *)&int2_route.int2_ctrl, 1);
-		int2_route.int2_ctrl.int2_drdy_xl = enable;
+				 (uint8_t *)&int2_ctrl, 1);
+		int2_ctrl.int2_drdy_xl = enable;
 		return lsm6dso_write_reg(lsm6dso->ctx, LSM6DSO_INT2_CTRL,
-					 (uint8_t *)&int2_route.int2_ctrl, 1);
+					 (uint8_t *)&int2_ctrl, 1);
 	}
 }
 
 /**
  * lsm6dso_enable_g_int - Gyro enable selected int pin to generate interrupt
  */
-static int lsm6dso_enable_g_int(struct device *dev, int enable)
+static int lsm6dso_enable_g_int(const struct device *dev, int enable)
 {
-	const struct lsm6dso_config *cfg = dev->config->config_info;
-	struct lsm6dso_data *lsm6dso = dev->driver_data;
+	const struct lsm6dso_config *cfg = dev->config;
+	struct lsm6dso_data *lsm6dso = dev->data;
 
 	if (enable) {
 		union axis3bit16_t buf;
@@ -99,32 +101,32 @@ static int lsm6dso_enable_g_int(struct device *dev, int enable)
 
 	/* set interrupt */
 	if (cfg->int_pin == 1) {
-		lsm6dso_pin_int1_route_t int1_route;
+		lsm6dso_int1_ctrl_t int1_ctrl;
 
 		lsm6dso_read_reg(lsm6dso->ctx, LSM6DSO_INT1_CTRL,
-				 (uint8_t *)&int1_route.int1_ctrl, 1);
-		int1_route.int1_ctrl.int1_drdy_g = enable;
+				 (uint8_t *)&int1_ctrl, 1);
+		int1_ctrl.int1_drdy_g = enable;
 		return lsm6dso_write_reg(lsm6dso->ctx, LSM6DSO_INT1_CTRL,
-					 (uint8_t *)&int1_route.int1_ctrl, 1);
+					 (uint8_t *)&int1_ctrl, 1);
 	} else {
-		lsm6dso_pin_int2_route_t int2_route;
+		lsm6dso_int2_ctrl_t int2_ctrl;
 
 		lsm6dso_read_reg(lsm6dso->ctx, LSM6DSO_INT2_CTRL,
-				 (uint8_t *)&int2_route.int2_ctrl, 1);
-		int2_route.int2_ctrl.int2_drdy_g = enable;
+				 (uint8_t *)&int2_ctrl, 1);
+		int2_ctrl.int2_drdy_g = enable;
 		return lsm6dso_write_reg(lsm6dso->ctx, LSM6DSO_INT2_CTRL,
-					 (uint8_t *)&int2_route.int2_ctrl, 1);
+					 (uint8_t *)&int2_ctrl, 1);
 	}
 }
 
 /**
  * lsm6dso_trigger_set - link external trigger to event data ready
  */
-int lsm6dso_trigger_set(struct device *dev,
+int lsm6dso_trigger_set(const struct device *dev,
 			  const struct sensor_trigger *trig,
 			  sensor_trigger_handler_t handler)
 {
-	struct lsm6dso_data *lsm6dso = dev->driver_data;
+	struct lsm6dso_data *lsm6dso = dev->data;
 
 	if (trig->chan == SENSOR_CHAN_ACCEL_XYZ) {
 		lsm6dso->handler_drdy_acc = handler;
@@ -159,14 +161,13 @@ int lsm6dso_trigger_set(struct device *dev,
  * lsm6dso_handle_interrupt - handle the drdy event
  * read data and call handler if registered any
  */
-static void lsm6dso_handle_interrupt(void *arg)
+static void lsm6dso_handle_interrupt(const struct device *dev)
 {
-	struct device *dev = arg;
-	struct lsm6dso_data *lsm6dso = dev->driver_data;
+	struct lsm6dso_data *lsm6dso = dev->data;
 	struct sensor_trigger drdy_trigger = {
 		.type = SENSOR_TRIG_DATA_READY,
 	};
-	const struct lsm6dso_config *cfg = dev->config->config_info;
+	const struct lsm6dso_config *cfg = dev->config;
 	lsm6dso_status_reg_t status;
 
 	while (1) {
@@ -198,19 +199,21 @@ static void lsm6dso_handle_interrupt(void *arg)
 #endif
 	}
 
-	gpio_pin_enable_callback(lsm6dso->gpio, cfg->int_gpio_pin);
+	gpio_pin_interrupt_configure(lsm6dso->gpio, cfg->int_gpio_pin,
+				     GPIO_INT_EDGE_TO_ACTIVE);
 }
 
-static void lsm6dso_gpio_callback(struct device *dev,
-				    struct gpio_callback *cb, u32_t pins)
+static void lsm6dso_gpio_callback(const struct device *dev,
+				    struct gpio_callback *cb, uint32_t pins)
 {
 	struct lsm6dso_data *lsm6dso =
 		CONTAINER_OF(cb, struct lsm6dso_data, gpio_cb);
-	const struct lsm6dso_config *cfg = dev->config->config_info;
+	const struct lsm6dso_config *cfg = lsm6dso->dev->config;
 
 	ARG_UNUSED(pins);
 
-	gpio_pin_disable_callback(dev, cfg->int_gpio_pin);
+	gpio_pin_interrupt_configure(lsm6dso->gpio, cfg->int_gpio_pin,
+				     GPIO_INT_DISABLE);
 
 #if defined(CONFIG_LSM6DSO_TRIGGER_OWN_THREAD)
 	k_sem_give(&lsm6dso->gpio_sem);
@@ -220,16 +223,11 @@ static void lsm6dso_gpio_callback(struct device *dev,
 }
 
 #ifdef CONFIG_LSM6DSO_TRIGGER_OWN_THREAD
-static void lsm6dso_thread(int dev_ptr, int unused)
+static void lsm6dso_thread(struct lsm6dso_data *lsm6dso)
 {
-	struct device *dev = INT_TO_POINTER(dev_ptr);
-	struct lsm6dso_data *lsm6dso = dev->driver_data;
-
-	ARG_UNUSED(unused);
-
 	while (1) {
 		k_sem_take(&lsm6dso->gpio_sem, K_FOREVER);
-		lsm6dso_handle_interrupt(dev);
+		lsm6dso_handle_interrupt(lsm6dso->dev);
 	}
 }
 #endif /* CONFIG_LSM6DSO_TRIGGER_OWN_THREAD */
@@ -244,10 +242,10 @@ static void lsm6dso_work_cb(struct k_work *work)
 }
 #endif /* CONFIG_LSM6DSO_TRIGGER_GLOBAL_THREAD */
 
-int lsm6dso_init_interrupt(struct device *dev)
+int lsm6dso_init_interrupt(const struct device *dev)
 {
-	struct lsm6dso_data *lsm6dso = dev->driver_data;
-	const struct lsm6dso_config *cfg = dev->config->config_info;
+	struct lsm6dso_data *lsm6dso = dev->data;
+	const struct lsm6dso_config *cfg = dev->config;
 	int ret;
 
 	/* setup data ready gpio interrupt (INT1 or INT2) */
@@ -259,21 +257,19 @@ int lsm6dso_init_interrupt(struct device *dev)
 	}
 
 #if defined(CONFIG_LSM6DSO_TRIGGER_OWN_THREAD)
-	k_sem_init(&lsm6dso->gpio_sem, 0, UINT_MAX);
+	k_sem_init(&lsm6dso->gpio_sem, 0, K_SEM_MAX_LIMIT);
 
 	k_thread_create(&lsm6dso->thread, lsm6dso->thread_stack,
 			CONFIG_LSM6DSO_THREAD_STACK_SIZE,
-			(k_thread_entry_t)lsm6dso_thread, dev,
-			0, NULL, K_PRIO_COOP(CONFIG_LSM6DSO_THREAD_PRIORITY),
+			(k_thread_entry_t)lsm6dso_thread, lsm6dso,
+			NULL, NULL, K_PRIO_COOP(CONFIG_LSM6DSO_THREAD_PRIORITY),
 			0, K_NO_WAIT);
 #elif defined(CONFIG_LSM6DSO_TRIGGER_GLOBAL_THREAD)
 	lsm6dso->work.handler = lsm6dso_work_cb;
-	lsm6dso->dev = dev;
 #endif /* CONFIG_LSM6DSO_TRIGGER_OWN_THREAD */
 
 	ret = gpio_pin_configure(lsm6dso->gpio, cfg->int_gpio_pin,
-				 GPIO_DIR_IN | GPIO_INT | GPIO_INT_EDGE |
-				 GPIO_INT_ACTIVE_HIGH | GPIO_INT_DEBOUNCE);
+				 GPIO_INPUT | cfg->int_gpio_flags);
 	if (ret < 0) {
 		LOG_DBG("Could not configure gpio");
 		return ret;
@@ -295,5 +291,6 @@ int lsm6dso_init_interrupt(struct device *dev)
 		return -EIO;
 	}
 
-	return gpio_pin_enable_callback(lsm6dso->gpio, cfg->int_gpio_pin);
+	return gpio_pin_interrupt_configure(lsm6dso->gpio, cfg->int_gpio_pin,
+					    GPIO_INT_EDGE_TO_ACTIVE);
 }

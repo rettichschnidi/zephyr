@@ -1,8 +1,6 @@
 # Copyright (c) 2019 Nordic Semiconductor ASA
 # SPDX-License-Identifier: Apache-2.0
 
-title: Nordic nRF family SPIS
-
 description: Nordic nRF family SPIS (SPI slave with EasyDMA)
 
 compatible: "nordic,nrf-spis"
@@ -13,7 +11,9 @@ properties:
     csn-pin:
       type: int
       required: true
-      description: CSN pin
+      description:  |
+          The CSN pin to use. The pin numbering scheme is the same as
+          the sck-pin property's.
 
     def-char:
       type: int

@@ -22,9 +22,9 @@ GNU ARM Embedded
 
    .. warning::
 
-	  The GNU ARM Embedded Toolchain for Windows, version **8-2018-q4-major**
-	  has a `critical bug <https://github.com/zephyrproject-rtos/zephyr/issues/12257>`_
-	  and should not be used. Toolchain version **7-2018-q2-update** is known to work.
+      On macOS Catalina or later you might need to :ref:`change a security
+      policy <mac-gatekeeper>` for the toolchain to be able to run from the
+      terminal.
 
 #. :ref:`Set these environment variables <env_vars>`:
 
@@ -50,6 +50,39 @@ GNU ARM Embedded
       > echo %GNUARMEMB_TOOLCHAIN_PATH%
       C:\gnu_arm_embedded
 
+
+DesignWare ARC MetaWare Development Toolkit (MWDT)
+**************************************************
+
+#. You need to have `ARC MWDT
+   <https://www.synopsys.com/dw/ipdir.php?ds=sw_metaware>`_ installed on your
+   host.
+
+#. :ref:`Set these environment variables <env_vars>`:
+
+   - Set :envvar:`ZEPHYR_TOOLCHAIN_VARIANT` to ``arcmwdt``.
+   - Set :envvar:`ARCMWDT_TOOLCHAIN_PATH` to the toolchain installation
+     directory. MWDT installation provides :envvar:`METAWARE_ROOT` so simply set
+     :envvar:`ARCMWDT_TOOLCHAIN_PATH` to ``$METAWARE_ROOT/../`` (Linux)
+     or ``%METAWARE_ROOT%\..\`` (Windows)
+
+#. To check that you have set these variables correctly in your current
+   environment, follow these example shell sessions (the
+   :envvar:`ARCMWDT_TOOLCHAIN_PATH` values may be different on your system):
+
+   .. code-block:: console
+
+      # Linux:
+      $ echo $ZEPHYR_TOOLCHAIN_VARIANT
+      arcmwdt
+      $ echo $ARCMWDT_TOOLCHAIN_PATH
+      /home/you/ARC/MWDT_2019.12/
+
+      # Windows
+      > echo %ZEPHYR_TOOLCHAIN_VARIANT%
+      arcmwdt
+      > echo %ARCMWDT_TOOLCHAIN_PATH%
+      C:\ARC\MWDT_2019.12\
 
 Crosstool-NG
 ************

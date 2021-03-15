@@ -368,9 +368,9 @@ static inline void hal_radio_ram_prio_setup(void)
 	/* TODO */
 }
 
-static inline u32_t hal_radio_phy_mode_get(u8_t phy, u8_t flags)
+static inline uint32_t hal_radio_phy_mode_get(uint8_t phy, uint8_t flags)
 {
-	u32_t mode;
+	uint32_t mode;
 
 	switch (phy) {
 	case BIT(0):
@@ -399,12 +399,71 @@ static inline u32_t hal_radio_phy_mode_get(u8_t phy, u8_t flags)
 	return mode;
 }
 
-static inline u32_t hal_radio_tx_power_max_get(void)
+static inline uint32_t hal_radio_tx_power_max_get(void)
 {
 	return RADIO_TXPOWER_TXPOWER_0dBm;
 }
 
-static inline u32_t hal_radio_tx_ready_delay_us_get(u8_t phy, u8_t flags)
+static inline uint32_t hal_radio_tx_power_min_get(void)
+{
+	return RADIO_TXPOWER_TXPOWER_Neg40dBm;
+}
+
+static inline uint32_t hal_radio_tx_power_floor(int8_t tx_power_lvl)
+{
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_0dBm) {
+		return RADIO_TXPOWER_TXPOWER_0dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg1dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg1dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg2dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg2dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg3dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg3dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg4dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg4dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg5dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg5dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg6dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg6dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg7dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg7dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg8dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg8dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg12dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg12dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg16dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg16dBm;
+	}
+
+	if (tx_power_lvl >= (int8_t)RADIO_TXPOWER_TXPOWER_Neg20dBm) {
+		return RADIO_TXPOWER_TXPOWER_Neg20dBm;
+	}
+
+	/* Note: The -30 dBm power level is deprecated so ignore it! */
+	return RADIO_TXPOWER_TXPOWER_Neg40dBm;
+}
+
+static inline uint32_t hal_radio_tx_ready_delay_us_get(uint8_t phy, uint8_t flags)
 {
 	switch (phy) {
 	default:
@@ -424,7 +483,7 @@ static inline u32_t hal_radio_tx_ready_delay_us_get(u8_t phy, u8_t flags)
 	}
 }
 
-static inline u32_t hal_radio_rx_ready_delay_us_get(u8_t phy, u8_t flags)
+static inline uint32_t hal_radio_rx_ready_delay_us_get(uint8_t phy, uint8_t flags)
 {
 	switch (phy) {
 	default:
@@ -444,7 +503,7 @@ static inline u32_t hal_radio_rx_ready_delay_us_get(u8_t phy, u8_t flags)
 	}
 }
 
-static inline u32_t hal_radio_tx_chain_delay_us_get(u8_t phy, u8_t flags)
+static inline uint32_t hal_radio_tx_chain_delay_us_get(uint8_t phy, uint8_t flags)
 {
 	switch (phy) {
 	default:
@@ -464,7 +523,7 @@ static inline u32_t hal_radio_tx_chain_delay_us_get(u8_t phy, u8_t flags)
 	}
 }
 
-static inline u32_t hal_radio_rx_chain_delay_us_get(u8_t phy, u8_t flags)
+static inline uint32_t hal_radio_rx_chain_delay_us_get(uint8_t phy, uint8_t flags)
 {
 	switch (phy) {
 	default:
@@ -484,7 +543,7 @@ static inline u32_t hal_radio_rx_chain_delay_us_get(u8_t phy, u8_t flags)
 	}
 }
 
-static inline u32_t hal_radio_tx_ready_delay_ns_get(u8_t phy, u8_t flags)
+static inline uint32_t hal_radio_tx_ready_delay_ns_get(uint8_t phy, uint8_t flags)
 {
 	switch (phy) {
 	default:
@@ -504,7 +563,7 @@ static inline u32_t hal_radio_tx_ready_delay_ns_get(u8_t phy, u8_t flags)
 	}
 }
 
-static inline u32_t hal_radio_rx_ready_delay_ns_get(u8_t phy, u8_t flags)
+static inline uint32_t hal_radio_rx_ready_delay_ns_get(uint8_t phy, uint8_t flags)
 {
 	switch (phy) {
 	default:
@@ -524,7 +583,7 @@ static inline u32_t hal_radio_rx_ready_delay_ns_get(u8_t phy, u8_t flags)
 	}
 }
 
-static inline u32_t hal_radio_tx_chain_delay_ns_get(u8_t phy, u8_t flags)
+static inline uint32_t hal_radio_tx_chain_delay_ns_get(uint8_t phy, uint8_t flags)
 {
 	switch (phy) {
 	default:
@@ -544,7 +603,7 @@ static inline u32_t hal_radio_tx_chain_delay_ns_get(u8_t phy, u8_t flags)
 	}
 }
 
-static inline u32_t hal_radio_rx_chain_delay_ns_get(u8_t phy, u8_t flags)
+static inline uint32_t hal_radio_rx_chain_delay_ns_get(uint8_t phy, uint8_t flags)
 {
 	switch (phy) {
 	default:

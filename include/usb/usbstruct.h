@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+
 /*
  *  LPCUSB, an USB device driver for LPC microcontrollers
  *  Copyright (C) 2006 Bertrik Sikken (bertrik@sikken.nl)
@@ -37,7 +39,7 @@
 #define ZEPHYR_INCLUDE_USB_USBSTRUCT_H_
 
 #define REQTYPE_GET_DIR(x)          (((x)>>7)&0x01)
-#define REQTYPE_GET_TYPE(x)         (((x)>>5)&0x03)
+#define REQTYPE_GET_TYPE(x)         (((x)>>5)&0x03U)
 #define REQTYPE_GET_RECIP(x)        ((x)&0x1F)
 
 #define REQTYPE_DIR_TO_DEVICE       0
@@ -80,23 +82,11 @@
 
 /** USB descriptor header */
 struct usb_desc_header {
-	u8_t bLength;               /**< descriptor length */
-	u8_t bDescriptorType;       /**< descriptor type */
+	uint8_t bLength;               /**< descriptor length */
+	uint8_t bDescriptorType;       /**< descriptor type */
 };
 
-#define DESC_DEVICE                 1
-#define DESC_CONFIGURATION          2
-#define DESC_STRING                 3
-#define DESC_INTERFACE              4
-#define DESC_ENDPOINT               5
-#define DESC_DEVICE_QUALIFIER       6
-#define DESC_OTHER_SPEED            7
-#define DESC_INTERFACE_POWER        8
-
-#define CS_INTERFACE                0x24
-#define CS_ENDPOINT                 0x25
-
-#define GET_DESC_TYPE(x)            (((x)>>8)&0xFF)
-#define GET_DESC_INDEX(x)           ((x)&0xFF)
+#define GET_DESC_TYPE(x)            (((x)>>8)&0xFFU)
+#define GET_DESC_INDEX(x)           ((x)&0xFFU)
 
 #endif /* ZEPHYR_INCLUDE_USB_USBSTRUCT_H_ */

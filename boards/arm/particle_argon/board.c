@@ -11,7 +11,7 @@
 
 static inline void external_antenna(bool on)
 {
-	struct device *ufl_gpio_dev, *pcb_gpio_dev;
+	const struct device *ufl_gpio_dev, *pcb_gpio_dev;
 
 	ufl_gpio_dev = device_get_binding(SKY_UFLn_GPIO_NAME);
 	if (!ufl_gpio_dev) {
@@ -24,20 +24,18 @@ static inline void external_antenna(bool on)
 	}
 
 	gpio_pin_configure(ufl_gpio_dev, SKY_UFLn_GPIO_PIN,
-			   GPIO_DIR_OUT | SKY_UFLn_GPIO_FLAGS);
+			   SKY_UFLn_GPIO_FLAGS
+			   | (on
+			      ? GPIO_OUTPUT_ACTIVE
+			      : GPIO_OUTPUT_INACTIVE));
 	gpio_pin_configure(pcb_gpio_dev, SKY_PCBn_GPIO_PIN,
-			   GPIO_DIR_OUT | SKY_PCBn_GPIO_FLAGS);
-
-	if (on) {
-		gpio_pin_write(ufl_gpio_dev, SKY_UFLn_GPIO_PIN, 0);
-		gpio_pin_write(pcb_gpio_dev, SKY_PCBn_GPIO_PIN, 1);
-	} else {
-		gpio_pin_write(ufl_gpio_dev, SKY_UFLn_GPIO_PIN, 1);
-		gpio_pin_write(pcb_gpio_dev, SKY_PCBn_GPIO_PIN, 0);
-	}
+			   SKY_PCBn_GPIO_FLAGS
+			   | (on
+			      ? GPIO_OUTPUT_INACTIVE
+			      : GPIO_OUTPUT_ACTIVE));
 }
 
-static int board_particle_argon_init(struct device *dev)
+static int board_particle_argon_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 

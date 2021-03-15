@@ -65,9 +65,10 @@ Nucleo F030R8 provides the following hardware components:
   - ARM Keil
   - GCC-based IDEs
 
-More information about STM32F030R8 can be found in the
-`STM32F030 reference manual`_
+More information about STM32F030R8 can be found here:
 
+- `STM32F030 reference manual`_
+- `STM32F030 data sheet`_
 
 Supported Features
 ==================
@@ -122,7 +123,7 @@ Default Zephyr Peripheral Mapping:
 - UART_1 TX/RX : PA9/PA10
 - UART_2 TX/RX : PA2/PA3 (ST-Link Virtual COM Port)
 - I2C1 SCL/SDA : PB8/PB9 (Arduino I2C)
-- I2C2 SCL/SDA : PA11/PA12
+- I2C2 SCL/SDA : PB10/PB11
 - SPI1 NSS/SCK/MISO/MOSI : PA4/PA5/PA6/PA7 (Arduino SPI)
 - SPI2 NSS/SCK/MISO/MOSI : PB12/PB13/PB14/PB15
 - USER_PB : PC13
@@ -174,10 +175,13 @@ References
 .. target-notes::
 
 .. _Nucleo F030R8 website:
-   http://www.st.com/content/st_com/en/products/microcontrollers/stm32-32-bit-arm-cortex-mcus/stm32-mainstream-mcus/stm32f0-series/stm32f0x0-value-line/stm32f030r8.html
+   https://www.st.com/en/evaluation-tools/nucleo-f030r8.html
 
 .. _STM32F030 reference manual:
-   http://www.st.com/resource/en/reference_manual/dm00091010.pdf
+   https://www.st.com/resource/en/reference_manual/dm00091010.pdf
+
+.. _STM32F030 data sheet:
+   https://www.st.com/resource/en/datasheet/stm32f030r8.pdf
 
 .. _STM32 Nucleo-64 board User Manual:
-   http://www.st.com/resource/en/user_manual/dm00105823.pdf
+   https://www.st.com/resource/en/user_manual/dm00105823.pdf

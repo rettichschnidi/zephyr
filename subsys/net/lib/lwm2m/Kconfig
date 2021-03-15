@@ -56,6 +56,17 @@ config LWM2M_ENGINE_MESSAGE_HEADER_SIZE
 	help
 	  Extra room allocated to handle CoAP header data
 
+config LWM2M_ENGINE_VALIDATION_BUFFER_SIZE
+	int "Size of the validation buffer for the incoming data"
+	default 64
+	help
+	  LwM2M will use the validation buffer during the write operation, to
+	  decode the resource value before validating it (applies for resources
+	  for which validation callback has been registered). Set this value to
+	  the maximum expected size of the resources that need to be validated
+	  (and thus have validation callback registered).
+	  Setting the validation buffer size to 0 disables validation support.
+
 config LWM2M_ENGINE_MAX_PENDING
 	int "LWM2M engine max. pending objects"
 	default 5
@@ -83,6 +94,31 @@ config LWM2M_ENGINE_DEFAULT_LIFETIME
 	help
 	  Set the default lifetime (in seconds) for the LWM2M library engine
 
+config LWM2M_SECONDS_TO_UPDATE_EARLY
+	int "LWM2M Registration Update transmission time before timeout"
+	default 6
+	range 1 65535
+	help
+	  Time in seconds before the registration timeout, when the LWM2M
+	  Registration Update is sent by the engine. In networks with large
+	  round trip times (like NB-IoT), it might be needed to set this value
+	  higher, in order to allow the response to arrive before timeout.
+
+config LWM2M_QUEUE_MODE_ENABLED
+	bool "Enable Queue Mode UDP binding"
+	help
+	  Set the transport binding to UDP with Queue Mode (UQ).
+
+config LWM2M_QUEUE_MODE_UPTIME
+	int "Specify time the LWM2M client should stay online in queue mode."
+	default 93
+	help
+	  This config specifies time (in seconds) the device should stay online
+	  after sending a message to the server. Note, that LWM2M specification
+	  recommends this to be CoAP MAX_TRANSMIT_WAIT parameter (which
+	  defaults to 93 seconds, see RFC 7252), it does not forbid other
+	  values though.
+
 config LWM2M_RD_CLIENT_SUPPORT
 	bool "support for LWM2M client bootstrap/registration state machine"
 	default y
@@ -94,6 +130,23 @@ config LWM2M_RD_CLIENT_SUPPORT_BOOTSTRAP
 	bool "Enable bootstrap support"
 	help
 	  Enabling this setting allows the RD client to support bootstrap mode.
+
+config LWM2M_RD_CLIENT_ENDPOINT_NAME_MAX_LENGTH
+	int "Maximum length of client endpoint name"
+	depends on LWM2M_RD_CLIENT_SUPPORT
+	default 33
+	help
+	  Default: room for 32 hexadeciaml digits (UUID) + NULL
+
+config LWM2M_RD_CLIENT_MAX_RETRIES
+	int "Specify maximum number of registration retries"
+	default 5
+	help
+	  Specify maximum number of registration retries, before the application
+	  is notified about the network failure. Once application is notified,
+	  it's up to the application to handle this situation in a way
+	  appropriate for the specific use-case (for instance by waiting for
+	  LTE link to be re-established).
 
 config LWM2M_PEER_PORT
 	int "LWM2M server port"
@@ -196,14 +249,11 @@ config LWM2M_FIRMWARE_UPDATE_PULL_COAP_PROXY_SUPPORT
 	help
 	  Include support for pulling firmware file via a CoAP-CoAP/HTTP proxy.
 
-if LWM2M_FIRMWARE_UPDATE_PULL_COAP_PROXY_SUPPORT
-
 config LWM2M_FIRMWARE_UPDATE_PULL_COAP_PROXY_ADDR
 	string "CoAP proxy network address"
+	depends on LWM2M_FIRMWARE_UPDATE_PULL_COAP_PROXY_SUPPORT
 	help
 	  Network address of the CoAP proxy server.
-
-endif # LWM2M_FIRMWARE_UPDATE_PULL_COAP_PROXY_SUPPORT
 
 config LWM2M_RW_JSON_SUPPORT
 	bool "support for JSON writer"
@@ -227,6 +277,14 @@ config LWM2M_DEVICE_ERROR_CODE_MAX
 	help
 	  This value sets the maximum number of error codes that the device
 	  object will store before ignoring new values.
+
+config LWM2M_DEVICE_EXT_DEV_INFO_MAX
+	int "Maximum # of device obj external device info to store"
+	default 5
+	range 1 20
+	help
+	  This value sets the maximum number of external device info that the
+	  device object will store before ignoring new values.
 
 config LWM2M_NUM_ATTR
 	int "Maximum # of LWM2M attributes"

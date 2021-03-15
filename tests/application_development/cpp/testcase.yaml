@@ -1,5 +1,6 @@
 tests:
-  misc.app_dev.cpp:
-    arch_exclude: posix
+  application_development.cpp.main:
+    integration_platforms:
+      - mps2_an385
     platform_exclude: qemu_x86_coverage
     tags: cpp

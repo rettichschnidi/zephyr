@@ -10,8 +10,7 @@
 
 / {
 	model = "Seeed Studio Nitrogen 96board";
-	compatible = "seeed,nitrogen", "nordic,nrf52832-qfaa",
-		     "nordic,nrf52832";
+	compatible = "seeed,nitrogen";
 
 	chosen {
 		zephyr,console = &uart0;
@@ -49,7 +48,7 @@
 		compatible = "gpio-keys";
 		button0: button_0 {
 			/* gpio flags need validation */
-			gpios = <&gpio0 27 GPIO_INT_ACTIVE_LOW>;
+			gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
 			label = "User Push Button";
 		};
 	};
@@ -76,8 +75,8 @@
 &i2c0 {
 	compatible = "nordic,nrf-twi";
 	status = "okay";
-	sda-pin = <20>;
-	scl-pin = <22>;
+	sda-gpios = <&gpio0 20 0>;
+	scl-gpios = <&gpio0 22 0>;
 };
 
 &spi1 {
@@ -89,10 +88,7 @@
 };
 
 &flash0 {
-	/*
-	 * For more information, see:
-	 * http://docs.zephyrproject.org/latest/guides/dts/index.html#flash-partitions
-	 */
+
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
@@ -118,7 +114,7 @@
 		/*
 		 * The flash starting at 0x0007a000 and ending at
 		 * 0x0007ffff (sectors 122-127) is reserved for use
-		 * by the application. If enabled, partition for FCB/NFFS
+		 * by the application. If enabled, partition for FCB/LittleFS
 		 * will be created in this area.
 		 */
 		storage_partition: partition@7a000 {

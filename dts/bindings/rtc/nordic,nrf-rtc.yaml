@@ -1,10 +1,7 @@
 # Copyright (c) 2018 Nordic Semiconductor ASA
 # SPDX-License-Identifier: Apache-2.0
 
-title: Nordic nRF Real Time Counter
-
-description: |
-    This is a representation of the Nordic nRF RTC node
+description: Nordic nRF RTC (Real-Time Counter)
 
 compatible: "nordic,nrf-rtc"
 
@@ -13,6 +10,14 @@ include: rtc.yaml
 properties:
     reg:
       required: true
+
+    cc-num:
+      type: int
+      required: true
+      description: |
+        Number of compare (CC) registers available.
+
+        On nRF53 these registers can also be used for capture.
 
     # If enabled, overflow different than full range (24 bits) is handled
     # through PPI channel which ensures precise timing. If disabled then
@@ -30,4 +35,3 @@ properties:
       type: boolean
       description: Enable fixed top value
       required: false
-

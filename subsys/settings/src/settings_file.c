@@ -16,8 +16,11 @@
 #include "settings_priv.h"
 
 #include <logging/log.h>
+
 LOG_MODULE_DECLARE(settings, CONFIG_SETTINGS_LOG_LEVEL);
 
+int settings_backend_init(void);
+void settings_mount_fs_backend(struct settings_file *cf);
 
 static int settings_file_load(struct settings_store *cs,
 			      const struct settings_load_arg *arg);
@@ -43,6 +46,9 @@ int settings_file_src(struct settings_file *cf)
 	return 0;
 }
 
+/*
+ * Register a file to be a destination of configuration.
+ */
 int settings_file_dst(struct settings_file *cf)
 {
 	if (!cf->cf_name) {
@@ -59,14 +65,13 @@ int settings_file_dst(struct settings_file *cf)
  *
  * This function checks if there is any duplicated data further in the buffer.
  *
- * @param cf        FCB handler
  * @param entry_ctx Current entry context
  * @param name      The name of the current entry
  *
  * @retval false No duplicates found
  * @retval true  Duplicate found
  */
-bool settings_file_check_duplicate(struct settings_file *cf,
+static bool settings_file_check_duplicate(
 				  const struct line_entry_ctx *entry_ctx,
 				  const char * const name)
 {
@@ -106,7 +111,6 @@ static int settings_file_load_priv(struct settings_store *cs, line_load_cb cb,
 				   void *cb_arg, bool filter_duplicates)
 {
 	struct settings_file *cf = (struct settings_file *)cs;
-	struct fs_dirent file_info;
 	struct fs_file_t file;
 	int lines;
 	int rc;
@@ -119,12 +123,9 @@ static int settings_file_load_priv(struct settings_store *cs, line_load_cb cb,
 
 	lines = 0;
 
-	rc = fs_stat(cf->cf_name, &file_info);
-	if (rc) {
-		return rc;
-	}
+	fs_file_t_init(&file);
 
-	rc = fs_open(&file, cf->cf_name);
+	rc = fs_open(&file, cf->cf_name, FS_O_CREATE | FS_O_RDWR);
 	if (rc != 0) {
 		return -EINVAL;
 	}
@@ -149,7 +150,7 @@ static int settings_file_load_priv(struct settings_store *cs, line_load_cb cb,
 
 		if (filter_duplicates &&
 		    (!read_entry_len(&entry_ctx, name_len+1) ||
-		     settings_file_check_duplicate(cf, &entry_ctx, name))) {
+		     settings_file_check_duplicate(&entry_ctx, name))) {
 			pass_entry = false;
 		}
 		/*name, val-read_cb-ctx, val-off*/
@@ -208,14 +209,15 @@ static int settings_file_create_or_replace(struct fs_file_t *zfp,
 		}
 	}
 
-	return fs_open(zfp, file_name);
+	return fs_open(zfp, file_name, FS_O_CREATE | FS_O_RDWR);
 }
 
 /*
  * Try to compress configuration file by keeping unique names only.
  */
-int settings_file_save_and_compress(struct settings_file *cf, const char *name,
-			      const char *value, size_t val_len)
+static int settings_file_save_and_compress(struct settings_file *cf,
+			   const char *name, const char *value,
+			   size_t val_len)
 {
 	int rc, rc2;
 	struct fs_file_t rf;
@@ -240,7 +242,10 @@ int settings_file_save_and_compress(struct settings_file *cf, const char *name,
 	size_t new_name_len;
 	size_t val1_off;
 
-	if (fs_open(&rf, cf->cf_name) != 0) {
+	fs_file_t_init(&rf);
+	fs_file_t_init(&wf);
+
+	if (fs_open(&rf, cf->cf_name, FS_O_CREATE | FS_O_RDWR) != 0) {
 		return -ENOEXEC;
 	}
 
@@ -360,13 +365,15 @@ static int settings_file_save_priv(struct settings_store *cs, const char *name,
 {
 	struct settings_file *cf = (struct settings_file *)cs;
 	struct line_entry_ctx entry_ctx;
-	struct fs_file_t  file;
+	struct fs_file_t file;
 	int rc2;
 	int rc;
 
 	if (!name) {
 		return -EINVAL;
 	}
+
+	fs_file_t_init(&file);
 
 	if (cf->cf_maxlines && (cf->cf_lines + 1 >= cf->cf_maxlines)) {
 		/*
@@ -380,14 +387,14 @@ static int settings_file_save_priv(struct settings_store *cs, const char *name,
 	/*
 	 * Open the file to add this one value.
 	 */
-	rc = fs_open(&file, cf->cf_name);
+	rc = fs_open(&file, cf->cf_name, FS_O_CREATE | FS_O_RDWR);
 	if (rc == 0) {
 		rc = fs_seek(&file, 0, FS_SEEK_END);
 		if (rc == 0) {
 			entry_ctx.stor_ctx = &file;
-			rc2 = settings_line_write(name, value, val_len, 0,
+			rc = settings_line_write(name, value, val_len, 0,
 						  (void *)&entry_ctx);
-			if (rc2 == 0) {
+			if (rc == 0) {
 				cf->cf_lines++;
 			}
 		}
@@ -494,4 +501,40 @@ static int write_handler(void *ctx, off_t off, char const *buf, size_t len)
 void settings_mount_fs_backend(struct settings_file *cf)
 {
 	settings_line_io_init(read_handler, write_handler, get_len_cb, 1);
+}
+
+int settings_backend_init(void)
+{
+	static struct settings_file config_init_settings_file = {
+		.cf_name = CONFIG_SETTINGS_FS_FILE,
+		.cf_maxlines = CONFIG_SETTINGS_FS_MAX_LINES
+	};
+	int rc;
+
+
+	rc = settings_file_src(&config_init_settings_file);
+	if (rc) {
+		k_panic();
+	}
+
+	rc = settings_file_dst(&config_init_settings_file);
+	if (rc) {
+		k_panic();
+	}
+
+	settings_mount_fs_backend(&config_init_settings_file);
+
+	/*
+	 * Must be called after root FS has been initialized.
+	 */
+	rc = fs_mkdir(CONFIG_SETTINGS_FS_DIR);
+
+	/*
+	 * The following lines mask the file exist error.
+	 */
+	if (rc == -EEXIST) {
+		rc = 0;
+	}
+
+	return rc;
 }

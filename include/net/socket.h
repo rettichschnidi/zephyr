@@ -7,6 +7,7 @@
 
 /*
  * Copyright (c) 2017-2018 Linaro Limited
+ * Copyright (c) 2021 Nordic Semiconductor
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -56,6 +57,8 @@ struct zsock_pollfd {
 #define ZSOCK_MSG_PEEK 0x02
 /** zsock_recv/zsock_send: Override operation to non-blocking */
 #define ZSOCK_MSG_DONTWAIT 0x40
+/** zsock_recv: block until the full amount of data can be returned */
+#define ZSOCK_MSG_WAITALL 0x100
 
 /* Well-known values, e.g. from Linux man 2 shutdown:
  * "The constants SHUT_RD, SHUT_WR, SHUT_RDWR have the value 0, 1, 2,
@@ -119,8 +122,23 @@ struct zsock_pollfd {
  *    - 1 - server
  */
 #define TLS_DTLS_ROLE 6
+/** Socket option for setting the supported Application Layer Protocols.
+ *  It accepts and returns a const char array of NULL terminated strings
+ *  representing the supported application layer protocols listed during
+ *  the TLS handshake.
+ */
+#define TLS_ALPN_LIST 7
 
 /** @} */
+
+/* Valid values for TLS_PEER_VERIFY option */
+#define TLS_PEER_VERIFY_NONE 0     /**< Peer verification disabled. */
+#define TLS_PEER_VERIFY_OPTIONAL 1 /**< Peer verification optional. */
+#define TLS_PEER_VERIFY_REQUIRED 2 /**< Peer verification required. */
+
+/* Valid values for TLS_DTLS_ROLE option */
+#define TLS_DTLS_ROLE_CLIENT 0 /**< Client role in a DTLS session. */
+#define TLS_DTLS_ROLE_SERVER 1 /**< Server role in a DTLS session. */
 
 struct zsock_addrinfo {
 	struct zsock_addrinfo *ai_next;
@@ -137,6 +155,44 @@ struct zsock_addrinfo {
 };
 
 /**
+ * @brief Obtain a file descriptor's associated net context
+ *
+ * With CONFIG_USERSPACE enabled, the kernel's object permission system
+ * must apply to socket file descriptors. When a socket is opened, by default
+ * only the caller has permission, access by other threads will fail unless
+ * they have been specifically granted permission.
+ *
+ * This is achieved by tagging data structure definitions that implement the
+ * underlying object associated with a network socket file descriptor with
+ * '__net_socket`. All pointers to instances of these will be known to the
+ * kernel as kernel objects with type K_OBJ_NET_SOCKET.
+ *
+ * This API is intended for threads that need to grant access to the object
+ * associated with a particular file descriptor to another thread. The
+ * returned pointer represents the underlying K_OBJ_NET_SOCKET  and
+ * may be passed to APIs like k_object_access_grant().
+ *
+ * In a system like Linux which has the notion of threads running in processes
+ * in a shared virtual address space, this sort of management is unnecessary as
+ * the scope of file descriptors is implemented at the process level.
+ *
+ * However in Zephyr the file descriptor scope is global, and MPU-based systems
+ * are not able to implement a process-like model due to the lack of memory
+ * virtualization hardware. They use discrete object permissions and memory
+ * domains instead to define thread access scope.
+ *
+ * User threads will have no direct access to the returned object
+ * and will fault if they try to access its memory; the pointer can only be
+ * used to make permission assignment calls, which follow exactly the rules
+ * for other kernel objects like device drivers and IPC.
+ *
+ * @param sock file descriptor
+ * @return pointer to associated network socket object, or NULL if the
+ *         file descriptor wasn't valid or the caller had no access permission
+ */
+__syscall void *zsock_get_context_object(int sock);
+
+/**
  * @brief Create a network socket
  *
  * @details
@@ -147,8 +203,27 @@ struct zsock_addrinfo {
  * This function is also exposed as ``socket()``
  * if :option:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
  * @endrst
+ *
+ * If CONFIG_USERSPACE is enabled, the caller will be granted access to the
+ * context object associated with the returned file descriptor.
+ * @see zsock_get_context_object()
+ *
  */
 __syscall int zsock_socket(int family, int type, int proto);
+
+/**
+ * @brief Create an unnamed pair of connected sockets
+ *
+ * @details
+ * @rst
+ * See `POSIX.1-2017 article
+ * <https://pubs.opengroup.org/onlinepubs/009695399/functions/socketpair.html>`__
+ * for normative description.
+ * This function is also exposed as ``socketpair()``
+ * if :option:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
+ * @endrst
+ */
+__syscall int zsock_socketpair(int family, int type, int proto, int *sv);
 
 /**
  * @brief Close a network socket
@@ -498,10 +573,7 @@ int zsock_getaddrinfo(const char *host, const char *service,
  * if :option:`CONFIG_NET_SOCKETS_POSIX_NAMES` is defined.
  * @endrst
  */
-static inline void zsock_freeaddrinfo(struct zsock_addrinfo *ai)
-{
-	free(ai);
-}
+void zsock_freeaddrinfo(struct zsock_addrinfo *ai);
 
 /**
  * @brief Convert zsock_getaddrinfo() error code to textual message
@@ -555,10 +627,14 @@ int zsock_getnameinfo(const struct sockaddr *addr, socklen_t addrlen,
 
 #define pollfd zsock_pollfd
 
-#if !defined(CONFIG_NET_SOCKETS_OFFLOAD)
 static inline int socket(int family, int type, int proto)
 {
 	return zsock_socket(family, type, proto);
+}
+
+static inline int socketpair(int family, int type, int proto, int sv[2])
+{
+	return zsock_socketpair(family, type, proto, sv);
 }
 
 static inline int close(int sock)
@@ -684,41 +760,11 @@ static inline int inet_pton(sa_family_t family, const char *src, void *dst)
 	return zsock_inet_pton(family, src, dst);
 }
 
-#else
-
-struct addrinfo {
-	int ai_flags;
-	int ai_family;
-	int ai_socktype;
-	int ai_protocol;
-	socklen_t ai_addrlen;
-	struct sockaddr *ai_addr;
-	char *ai_canonname;
-	struct addrinfo *ai_next;
-};
-
-/* Legacy case: retain containing extern "C" with C++
- *
- * This header requires aliases defined within this file, and can't
- * easily be moved to the top.
- */
-#include <net/socket_offload.h>
-
-static inline int inet_pton(sa_family_t family, const char *src, void *dst)
+static inline char *inet_ntop(sa_family_t family, const void *src, char *dst,
+			      size_t size)
 {
-	if ((family != AF_INET) && (family != AF_INET6)) {
-		errno = EAFNOSUPPORT;
-		return -1;
-	}
-
-	if (net_addr_pton(family, src, dst) == 0) {
-		return 1;
-	} else {
-		return 0;
-	}
+	return zsock_inet_ntop(family, src, dst, size);
 }
-
-#endif /* !defined(CONFIG_NET_SOCKETS_OFFLOAD) */
 
 #define POLLIN ZSOCK_POLLIN
 #define POLLOUT ZSOCK_POLLOUT
@@ -728,16 +774,11 @@ static inline int inet_pton(sa_family_t family, const char *src, void *dst)
 
 #define MSG_PEEK ZSOCK_MSG_PEEK
 #define MSG_DONTWAIT ZSOCK_MSG_DONTWAIT
+#define MSG_WAITALL ZSOCK_MSG_WAITALL
 
 #define SHUT_RD ZSOCK_SHUT_RD
 #define SHUT_WR ZSOCK_SHUT_WR
 #define SHUT_RDWR ZSOCK_SHUT_RDWR
-
-static inline char *inet_ntop(sa_family_t family, const void *src, char *dst,
-			      size_t size)
-{
-	return zsock_inet_ntop(family, src, dst, size);
-}
 
 #define EAI_BADFLAGS DNS_EAI_BADFLAGS
 #define EAI_NONAME DNS_EAI_NONAME
@@ -747,6 +788,8 @@ static inline char *inet_ntop(sa_family_t family, const void *src, char *dst,
 #define EAI_MEMORY DNS_EAI_MEMORY
 #define EAI_SYSTEM DNS_EAI_SYSTEM
 #define EAI_SERVICE DNS_EAI_SERVICE
+#define EAI_SOCKTYPE DNS_EAI_SOCKTYPE
+#define EAI_FAMILY DNS_EAI_FAMILY
 #endif /* defined(CONFIG_NET_SOCKETS_POSIX_NAMES) */
 
 /** sockopt: Socket-level option */
@@ -755,11 +798,23 @@ static inline char *inet_ntop(sa_family_t family, const void *src, char *dst,
 /* Socket options for SOL_SOCKET level */
 /** sockopt: Enable server address reuse (ignored, for compatibility) */
 #define SO_REUSEADDR 2
+/** sockopt: Type of the socket */
+#define SO_TYPE 3
 /** sockopt: Async error (ignored, for compatibility) */
 #define SO_ERROR 4
 
+/**
+ * sockopt: Receive timeout
+ * Applies to receive functions like recv(), but not to connect()
+ */
+#define SO_RCVTIMEO 20
+/** sockopt: Send timeout */
+#define SO_SNDTIMEO 21
+
 /** sockopt: Timestamp TX packets */
 #define SO_TIMESTAMPING 37
+/** sockopt: Protocol used with the socket */
+#define SO_PROTOCOL 38
 
 /* Socket options for IPPROTO_TCP level */
 /** sockopt: Disable TCP buffering (ignored, for compatibility) */

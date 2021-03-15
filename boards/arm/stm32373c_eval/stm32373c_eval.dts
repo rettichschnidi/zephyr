@@ -6,10 +6,11 @@
 
 /dts-v1/;
 #include <st/f3/stm32f373Xc.dtsi>
+#include <st/f3/stm32f373v(8-b-c)tx-pinctrl.dtsi>
 
 / {
 	model = "STMicroelectronics STM32373C-EVAL board";
-	compatible = "st,stm32373c-eval", "st,stm32f373";
+	compatible = "st,stm32373c-eval";
 
 	chosen {
 		zephyr,console = &usart2;
@@ -21,7 +22,7 @@
 	leds {
 		compatible = "gpio-leds";
 		green_led_2: led_2 {
-			gpios = <&gpioc 1 GPIO_INT_ACTIVE_HIGH>;
+			gpios = <&gpioc 1 GPIO_ACTIVE_HIGH>;
 			label = "User LD2";
 		};
 	};
@@ -30,7 +31,7 @@
 		compatible = "gpio-keys";
 		user_button: button {
 			label = "Key";
-			gpios = <&gpioa 2 GPIO_INT_ACTIVE_LOW>;
+			gpios = <&gpioa 2 GPIO_ACTIVE_LOW>;
 		};
 	};
 
@@ -41,6 +42,7 @@
 };
 
 &usart2 {
+	pinctrl-0 = <&usart2_tx_pd5 &usart2_rx_pd6>;
 	current-speed = <115200>;
 	status = "okay";
 };

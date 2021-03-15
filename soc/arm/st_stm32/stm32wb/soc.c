@@ -12,7 +12,7 @@
 #include <device.h>
 #include <init.h>
 #include <arch/cpu.h>
-#include <arch/arm/cortex_m/cmsis.h>
+#include <arch/arm/aarch32/cortex_m/cmsis.h>
 
 /**
  * @brief Perform basic hardware initialization at boot.
@@ -22,9 +22,9 @@
  *
  * @return 0
  */
-static int stm32wb_init(struct device *arg)
+static int stm32wb_init(const struct device *arg)
 {
-	u32_t key;
+	uint32_t key;
 
 	ARG_UNUSED(arg);
 

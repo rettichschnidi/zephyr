@@ -8,9 +8,12 @@
 
 
 #include <soc.h>
-#include <clock_control.h>
-#include <misc/util.h>
-#include <clock_control/stm32_clock_control.h>
+#include <stm32_ll_bus.h>
+#include <stm32_ll_rcc.h>
+#include <stm32_ll_utils.h>
+#include <drivers/clock_control.h>
+#include <sys/util.h>
+#include <drivers/clock_control/stm32_clock_control.h>
 #include "clock_stm32_ll_common.h"
 
 
@@ -39,7 +42,8 @@ void config_pll_init(LL_UTILS_PLLInitTypeDef *pllinit)
  */
 void config_enable_default_clocks(void)
 {
-	/* Do nothing */
+	/* Enable the power interface clock */
+	LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
 }
 
 /**

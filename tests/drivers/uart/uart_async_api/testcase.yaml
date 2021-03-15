@@ -1,5 +1,15 @@
 tests:
-  peripheral.uart_async_api:
+  drivers.uart.uart_async_api:
     tags: drivers
     filter: CONFIG_UART_CONSOLE and CONFIG_SERIAL_SUPPORT_ASYNC
-    harness: keyboard
+    harness: ztest
+    harness_config:
+      fixture: gpio_loopback
+  drivers.uart.uart_async_api.rtt:
+    tags: drivers
+    filter: CONFIG_UART_CONSOLE and CONFIG_SERIAL_SUPPORT_ASYNC and CONFIG_HAS_SEGGER_RTT
+    extra_args: DTC_OVERLAY_FILE=boards/segger_rtt.overlay
+    extra_configs:
+      - CONFIG_USE_SEGGER_RTT=y
+      - CONFIG_UART_RTT=y
+    build_only: true

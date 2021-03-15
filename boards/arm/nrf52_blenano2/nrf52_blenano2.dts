@@ -9,8 +9,7 @@
 
 / {
 	model = "Redbear BLE Nano 2";
-	compatible = "redbear,blenano2", "nordic,nrf52832-qfaa",
-		     "nordic,nrf52832";
+	compatible = "redbear,blenano2";
 
 	chosen {
 		zephyr,console = &uart0;
@@ -57,15 +56,12 @@
 &i2c0 {
 	compatible = "nordic,nrf-twim";
 	status = "okay";
-	sda-pin = <28>;
-	scl-pin = <2>;
+	sda-gpios = <&gpio0 28 0>;
+	scl-gpios = <&gpio0 2 0>;
 };
 
 &flash0 {
-	/*
-	 * For more information, see:
-	 * http://docs.zephyrproject.org/latest/guides/dts/index.html#flash-partitions
-	 */
+
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
@@ -91,8 +87,9 @@
 		/*
 		 * The flash starting at 0x0007a000 and ending at
 		 * 0x0007ffff (sectors 122-127) is reserved for use
-		 * by the application. If enabled, partition for FCB/NFFS
-		 * will be created in this area.
+		 * by the application.
+		 * Storage partition will be used by FCB/LittleFS/NVS
+		 * if enabled.
 		 */
 		storage_partition: partition@7a000 {
 			label = "storage";

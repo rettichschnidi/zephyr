@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
-CONFIG_ARM=y
 CONFIG_SOC_SERIES_STM32L4X=y
 CONFIG_SOC_STM32L496XX=y
 # 80MHz system clock
@@ -37,3 +36,6 @@ CONFIG_UART_CONSOLE=y
 
 #enable MPU
 CONFIG_ARM_MPU=y
+
+# Enable HW stack protection
+CONFIG_HW_STACK_PROTECTION=y

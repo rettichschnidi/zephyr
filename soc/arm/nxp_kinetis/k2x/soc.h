@@ -17,17 +17,11 @@
 #ifndef _SOC__H_
 #define _SOC__H_
 
-#include <misc/util.h>
+#include <sys/util.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* default system clock */
-
-#define SYSCLK_DEFAULT_IOSC_HZ MHZ(120)
-#define BUSCLK_DEFAULT_IOSC_HZ (SYSCLK_DEFAULT_IOSC_HZ / \
-				CONFIG_K22_BUS_CLOCK_DIVIDER)
 
 /* address bases */
 
@@ -37,7 +31,7 @@ extern "C" {
 
 #include <fsl_common.h>
 #include <device.h>
-#include <misc/util.h>
+#include <sys/util.h>
 #include <random/rand32.h>
 
 #endif /* !_ASMLANGUAGE */

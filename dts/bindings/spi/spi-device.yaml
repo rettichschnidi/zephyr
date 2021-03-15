@@ -3,9 +3,9 @@
 
 # Common fields for SPI devices
 
-include: base.yaml
+include: [base.yaml, power.yaml]
 
-parent-bus: spi
+on-bus: spi
 
 properties:
     reg:

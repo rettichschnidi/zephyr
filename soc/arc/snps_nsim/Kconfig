@@ -1,14 +1,17 @@
 # Copyright (c) 2018 Synopsys, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-if SOC_NSIM
-
 choice
 	prompt "ARC nSIM SoC Selection"
 	default SOC_NSIM_EM
+	depends on SOC_NSIM
 
 config SOC_NSIM_EM
 	bool "Synopsys ARC EM in nSIM"
+	select CPU_HAS_MPU
+
+config SOC_NSIM_EM7D_V22
+	bool "Synopsys ARC EM7D_V22 in nSIM"
 	select CPU_HAS_MPU
 	select CPU_HAS_FPU
 
@@ -27,5 +30,3 @@ config SOC_NSIM_HS_SMP
 	select CPU_HAS_FPU
 
 endchoice
-
-endif # SOC_NSIM

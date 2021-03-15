@@ -3,18 +3,16 @@
 # Copyright (c) 2018 Nordic Semiconductor ASA
 # SPDX-License-Identifier: Apache-2.0
 
-menuconfig BT_GATT_BAS
+menuconfig BT_BAS
 	bool "Enable GATT Battery service"
 	select SENSOR
-	default n
 
-if BT_GATT_BAS
-
-config BT_GATT_BAS_LOG_LEVEL
+config BT_BAS_LOG_LEVEL
 	int "Battery service log level"
 	depends on LOG
 	range 0 4
 	default 0
+	depends on BT_BAS
 	help
 	  Sets log level for the Battery service.
 	  Levels are:
@@ -23,5 +21,3 @@ config BT_GATT_BAS_LOG_LEVEL
 	  2 WARNING, write LOG_WRN in addition to previous level
 	  3 INFO, write LOG_INF in addition to previous levels
 	  4 DEBUG, write LOG_DBG in addition to previous levels
-
-endif # BT_GATT_BAS

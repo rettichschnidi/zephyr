@@ -13,8 +13,8 @@
  * the HW models.
  *
  * The HW models raising an interrupt will "awake the cpu" by calling
- * poisix_interrupt_raised() which will transfer control to the irq handler,
- * which will run inside SW/Zephyr contenxt. After which a arch_swap() to
+ * posix_interrupt_raised() which will transfer control to the irq handler,
+ * which will run inside SW/Zephyr context. After which a arch_swap() to
  * whatever Zephyr thread may follow.  Again, once Zephyr is done, control is
  * given back to the HW models.
  *
@@ -73,7 +73,7 @@ int posix_is_cpu_running(void)
  * raise a new interrupt; and how the HW models awake the CPU, and wait for it
  * to complete and go to idle.
  */
-static void posix_change_cpu_state_and_wait(bool halted)
+void posix_change_cpu_state_and_wait(bool halted)
 {
 	PC_SAFE_CALL(pthread_mutex_lock(&mtx_cpu));
 

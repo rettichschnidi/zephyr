@@ -7,7 +7,7 @@
 #include <device.h>
 #include <init.h>
 #include <arch/cpu.h>
-#include <arch/arm/cortex_m/cmsis.h>
+#include <arch/arm/aarch32/cortex_m/cmsis.h>
 
 #include "cy_syslib.h"
 #include "cy_gpio.h"
@@ -370,7 +370,7 @@ void Cy_SystemInit(void)
 	Cy_SysClk_PeriphEnableDivider(CY_SYSCLK_DIV_8_BIT, 0u);
 }
 
-static int init_cycfg_platform_wraper(struct device *arg)
+static int init_cycfg_platform_wraper(const struct device *arg)
 {
 	ARG_UNUSED(arg);
 	SystemInit();

@@ -19,49 +19,49 @@ LOG_MODULE_REGISTER(main);
 
 static struct k_delayed_work delayed_report_send;
 
-static struct device *hdev;
+static const struct device *hdev;
 
 #define REPORT_TIMEOUT K_SECONDS(2)
 
 /* Some HID sample Report Descriptor */
-static const u8_t hid_report_desc[] = {
+static const uint8_t hid_report_desc[] = {
 	/* 0x05, 0x01,		USAGE_PAGE (Generic Desktop)		*/
-	HID_GI_USAGE_PAGE, USAGE_GEN_DESKTOP,
+	HID_USAGE_PAGE(HID_USAGE_GEN_DESKTOP),
 	/* 0x09, 0x00,		USAGE (Undefined)			*/
-	HID_LI_USAGE, USAGE_GEN_DESKTOP_UNDEFINED,
+	HID_USAGE(HID_USAGE_GEN_DESKTOP_UNDEFINED),
 	/* 0xa1, 0x01,		COLLECTION (Application)		*/
-	HID_MI_COLLECTION, COLLECTION_APPLICATION,
+	HID_COLLECTION(HID_COLLECTION_APPLICATION),
 	/* 0x15, 0x00,			LOGICAL_MINIMUM one-byte (0)	*/
-	HID_GI_LOGICAL_MIN(1), 0x00,
+	HID_LOGICAL_MIN8(0x00),
 	/* 0x26, 0xff, 0x00,		LOGICAL_MAXIMUM two-bytes (255)	*/
-	HID_GI_LOGICAL_MAX(2), 0xFF, 0x00,
+	HID_LOGICAL_MAX16(0xFF, 0x00),
 	/* 0x85, 0x01,			REPORT_ID (1)			*/
-	HID_GI_REPORT_ID, REPORT_ID_1,
+	HID_REPORT_ID(REPORT_ID_1),
 	/* 0x75, 0x08,			REPORT_SIZE (8) in bits		*/
-	HID_GI_REPORT_SIZE, 0x08,
+	HID_REPORT_SIZE(8),
 	/* 0x95, 0x01,			REPORT_COUNT (1)		*/
-	HID_GI_REPORT_COUNT, 0x01,
+	HID_REPORT_COUNT(1),
 	/* 0x09, 0x00,			USAGE (Undefined)		*/
-	HID_LI_USAGE, USAGE_GEN_DESKTOP_UNDEFINED,
+	HID_USAGE(HID_USAGE_GEN_DESKTOP_UNDEFINED),
 	/* v0x81, 0x82,			INPUT (Data,Var,Abs,Vol)	*/
-	HID_MI_INPUT, 0x82,
+	HID_INPUT(0x02),
 	/* 0x85, 0x02,			REPORT_ID (2)			*/
-	HID_GI_REPORT_ID, REPORT_ID_2,
+	HID_REPORT_ID(REPORT_ID_2),
 	/* 0x75, 0x08,			REPORT_SIZE (8) in bits		*/
-	HID_GI_REPORT_SIZE, 0x08,
+	HID_REPORT_SIZE(8),
 	/* 0x95, 0x01,			REPORT_COUNT (1)		*/
-	HID_GI_REPORT_COUNT, 0x01,
+	HID_REPORT_COUNT(1),
 	/* 0x09, 0x00,			USAGE (Undefined)		*/
-	HID_LI_USAGE, USAGE_GEN_DESKTOP_UNDEFINED,
+	HID_USAGE(HID_USAGE_GEN_DESKTOP_UNDEFINED),
 	/* 0x91, 0x82,			OUTPUT (Data,Var,Abs,Vol)	*/
-	HID_MI_OUTPUT, 0x82,
+	HID_OUTPUT(0x82),
 	/* 0xc0			END_COLLECTION			*/
-	HID_MI_COLLECTION_END,
+	HID_END_COLLECTION,
 };
 
 static void send_report(struct k_work *work)
 {
-	static u8_t report_1[2] = { REPORT_ID_1, 0x00 };
+	static uint8_t report_1[2] = { REPORT_ID_1, 0x00 };
 	int ret, wrote;
 
 	ret = hid_int_ep_write(hdev, report_1, sizeof(report_1), &wrote);
@@ -72,16 +72,18 @@ static void send_report(struct k_work *work)
 	report_1[1]++;
 }
 
-static void in_ready_cb(void)
+static void in_ready_cb(const struct device *dev)
 {
+	ARG_UNUSED(dev);
+
 	k_delayed_work_submit(&delayed_report_send, REPORT_TIMEOUT);
 }
 
-static void status_cb(enum usb_dc_status_code status, const u8_t *param)
+static void status_cb(enum usb_dc_status_code status, const uint8_t *param)
 {
 	switch (status) {
 	case USB_DC_CONFIGURED:
-		in_ready_cb();
+		in_ready_cb(hdev);
 		break;
 	case USB_DC_SOF:
 		break;
@@ -91,17 +93,17 @@ static void status_cb(enum usb_dc_status_code status, const u8_t *param)
 	}
 }
 
-static void idle_cb(u16_t report_id)
+static void idle_cb(const struct device *dev, uint16_t report_id)
 {
-	static u8_t report_1[2] = { 0x00, 0xEB };
+	static uint8_t report_1[2] = { 0x00, 0xEB };
 	int ret, wrote;
 
-	ret = hid_int_ep_write(hdev, report_1, sizeof(report_1), &wrote);
+	ret = hid_int_ep_write(dev, report_1, sizeof(report_1), &wrote);
 
 	LOG_DBG("Idle callback: wrote %d bytes with ret %d", wrote, ret);
 }
 
-static void protocol_cb(u8_t protocol)
+static void protocol_cb(const struct device *dev, uint8_t protocol)
 {
 	LOG_DBG("New protocol: %s", protocol == HID_PROTOCOL_BOOT ?
 		"boot" : "report");
@@ -109,19 +111,26 @@ static void protocol_cb(u8_t protocol)
 
 static const struct hid_ops ops = {
 	.int_in_ready = in_ready_cb,
-	.status_cb = status_cb,
 	.on_idle = idle_cb,
 	.protocol_change = protocol_cb,
 };
 
 void main(void)
 {
+	int ret;
+
 	LOG_DBG("Starting application");
+
+	ret = usb_enable(status_cb);
+	if (ret != 0) {
+		LOG_ERR("Failed to enable USB");
+		return;
+	}
 
 	k_delayed_work_init(&delayed_report_send, send_report);
 }
 
-static int composite_pre_init(struct device *dev)
+static int composite_pre_init(const struct device *dev)
 {
 	hdev = device_get_binding("HID_0");
 	if (hdev == NULL) {
