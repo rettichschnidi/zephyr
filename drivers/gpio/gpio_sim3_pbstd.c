@@ -5,7 +5,7 @@
  */
 
 #include <errno.h>
-#include <gpio.h>
+#include <drivers/gpio.h>
 #include <soc.h>
 
 #include "gpio_utils.h"
@@ -27,7 +27,7 @@ struct gpio_sim3_pbstd_data {
 	/* port ISR callback routine address */
 	sys_slist_t callbacks;
 	/* pin callback routine enable flags, by pin number */
-	u32_t pin_callback_enables;
+	uint32_t pin_callback_enables;
 };
 
 static const struct gpio_sim3_pbstd_common_config
@@ -43,8 +43,8 @@ gpio_sim3_add_pbstd_port(struct gpio_sim3_pbstd_common_data *data,
 	data->ports[data->count++] = dev;
 }
 
-static int gpio_sim3_pbstd_write(struct device *dev, int access_op, u32_t pin,
-				 u32_t value)
+static int gpio_sim3_pbstd_write(struct device *dev, int access_op, uint32_t pin,
+				 uint32_t value)
 {
 	const struct gpio_sim3_config *config = dev->config->config_info;
 	PBSTD_Type *gpio_base = config->gpio_base;
@@ -71,8 +71,8 @@ static int gpio_sim3_pbstd_write(struct device *dev, int access_op, u32_t pin,
 	return 0;
 }
 
-static int gpio_sim3_pbstd_read(struct device *dev, int access_op, u32_t pin,
-				u32_t *value)
+static int gpio_sim3_pbstd_read(struct device *dev, int access_op, uint32_t pin,
+				uint32_t *value)
 {
 	const struct gpio_sim3_config *config = dev->config->config_info;
 	PBSTD_Type *gpio_base = config->gpio_base;
@@ -89,11 +89,11 @@ static int gpio_sim3_pbstd_read(struct device *dev, int access_op, u32_t pin,
 }
 
 static inline int gpio_sim3_pbstd_configure(struct device *dev, int access_op,
-					    u32_t pin, int flags)
+					    uint32_t pin, int flags)
 {
 	const struct gpio_sim3_config *config = dev->config->config_info;
 	PBSTD_Type *gpio_base = config->gpio_base;
-	const int common = gpio_sim3_configure(dev, access_op, pin, flags);
+	const int common = gpio_sim3_pin_configure(dev, access_op, pin, flags);
 
 	if (common < 0) {
 		return common;
@@ -143,7 +143,7 @@ static int gpio_sim3_pbstd_manage_callback(struct device *dev,
 }
 
 static int gpio_sim3_pbstd_enable_callback(struct device *dev, int access_op,
-					   u32_t pin)
+					   uint32_t pin)
 {
 	struct gpio_sim3_pbstd_data *data = dev->driver_data;
 	const struct gpio_sim3_config *config = dev->config->config_info;
@@ -160,7 +160,7 @@ static int gpio_sim3_pbstd_enable_callback(struct device *dev, int access_op,
 }
 
 static int gpio_sim3_pbstd_disable_callback(struct device *dev, int access_op,
-					    u32_t pin)
+					    uint32_t pin)
 {
 	struct gpio_sim3_pbstd_data *data = dev->driver_data;
 	const struct gpio_sim3_config *config = dev->config->config_info;
@@ -183,7 +183,7 @@ static void gpio_sim3_pbstd_isr(void *arg)
 {
 	struct device *dev = (struct device *)arg;
 	struct gpio_sim3_pbstd_common_data *data = dev->driver_data;
-	u32_t enabled_int, int_status;
+	uint32_t enabled_int, int_status;
 	struct device *port_dev;
 	struct gpio_sim3_pbstd_data *port_data;
 	const struct gpio_sim3_config *config;

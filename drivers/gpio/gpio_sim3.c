@@ -5,31 +5,21 @@
  */
 
 #include <errno.h>
-#include <gpio.h>
+#include <drivers/gpio.h>
 #include <soc.h>
 
 #include "gpio_sim3.h"
-#include "gpio_utils.h"
 
-#define NUMBER_OF_PORTS 5
-
-int gpio_sim3_configure(struct device *dev, int access_op, u32_t pin, int flags)
+int gpio_sim3_pin_configure(const struct device *port, gpio_pin_t pin,
+			    gpio_flags_t flags)
 {
-	/* Enable APB clock to the PPL0 registers. */
-	CLKCTRL0->APBCLKG0_b.PLL0CEN = 1;
-
 	/* Check for an invalid pin configuration */
-	if ((flags & GPIO_INT) && (flags & GPIO_DIR_OUT)) {
+	if ((flags & GPIO_INT_ENABLE) && (flags & GPIO_OUTPUT)) {
 		return -EINVAL;
 	}
 
 	/* Interrupt on edge is not supported by the hardware */
-	if ((flags & GPIO_INT) && (flags & GPIO_INT_EDGE)) {
-		return -ENOTSUP;
-	}
-
-	/* Setting interrupt flags for a complete port is not implemented */
-	if ((flags & GPIO_INT) && (access_op == GPIO_ACCESS_BY_PORT)) {
+	if ((flags & GPIO_INT_ENABLE) && (flags & GPIO_INT_EDGE)) {
 		return -ENOTSUP;
 	}
 
@@ -38,11 +28,8 @@ int gpio_sim3_configure(struct device *dev, int access_op, u32_t pin, int flags)
 		return -ENOTSUP;
 	}
 
-	/* Configuring a complete port is not implemented */
-	if (access_op != GPIO_ACCESS_BY_PIN) {
-		return -ENOTSUP;
-	}
+	/* Enable APB clock to the PPL0 registers. */
+	CLKCTRL0->APBCLKG0_b.PLL0CEN = 1;
 
 	return 0;
 }
-

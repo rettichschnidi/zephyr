@@ -14,7 +14,7 @@
 #include <soc.h>
 
 #include <arch/cpu.h>
-#include <arch/arm/cortex_m/cmsis.h>
+#include <arch/arm/aarch32/cortex_m/cmsis.h>
 
 uint32_t SystemCoreClock = CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC;
 
@@ -130,7 +130,7 @@ static int silabs_sim3u_crossbar_init(struct device *arg)
 {
 	ARG_UNUSED(arg);
 #ifdef CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0
-	const u32_t crossbar_0_pb0 = 0
+	const uint32_t crossbar_0_pb0 = 0
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_0_SKIP)
 				     | (1U << 0)
 #endif
@@ -182,7 +182,7 @@ static int silabs_sim3u_crossbar_init(struct device *arg)
 		;
 	PBSTD0->PBSKIPEN = crossbar_0_pb0;
 
-	const u32_t crossbar_0_pb1 = 0
+	const uint32_t crossbar_0_pb1 = 0
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_0_SKIP)
 				     | (1U << 0)
 #endif
@@ -238,7 +238,7 @@ static int silabs_sim3u_crossbar_init(struct device *arg)
 #endif /* CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0 */
 
 #ifdef CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1
-	const u32_t crossbar_1_pb2 = 0
+	const uint32_t crossbar_1_pb2 = 0
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_0_SKIP)
 				     | (1U << 0)
 #endif
@@ -290,7 +290,7 @@ static int silabs_sim3u_crossbar_init(struct device *arg)
 		;
 	PBSTD2->PBSKIPEN = crossbar_1_pb2;
 
-	const u32_t crossbar_1_pb3 = 0
+	const uint32_t crossbar_1_pb3 = 0
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_0_SKIP)
 				     | (1U << 0)
 #endif

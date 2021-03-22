@@ -13,7 +13,7 @@
 #ifndef SOC_H_
 #define SOC_H_
 
-#include <misc/util.h>
+#include <sys/util.h>
 
 #ifdef __cplusplus
 extern "C" {

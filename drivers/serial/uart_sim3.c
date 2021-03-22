@@ -5,13 +5,13 @@
  */
 
 #include <errno.h>
-#include <uart.h>
+#include <drivers/uart.h>
 #include <soc.h>
 
 
 struct uart_sim3_config {
 	UART_Type *base;
-	u32_t baud_rate;
+	uint32_t baud_rate;
 	// unsigned int loc;
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	void (*irq_config_func)(struct device *dev);
@@ -25,22 +25,22 @@ struct uart_sim3_data {
 #endif
 };
 
-static int uart_sim3_poll_in(struct device *dev, unsigned char *c)
+static int uart_sim3_poll_in(const struct device *dev, unsigned char *c)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
-	u8_t fifo_count = config->base->FIFOCN_b.RCNT;
+	const struct uart_sim3_config *config = dev->config;
+	uint8_t fifo_count = config->base->FIFOCN_b.RCNT;
 
 	if (fifo_count) {
-	    *c = config->base->DATA.U8;
+		*c = config->base->DATA.U8;
 		return 0;
 	}
 
 	return -1;
 }
 
-static void uart_sim3_poll_out(struct device *dev, unsigned char c)
+static void uart_sim3_poll_out(const struct device *dev, unsigned char c)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
+	const struct uart_sim3_config *config = dev->config;
 
 	/* Wait for transmitter fifo to be empty. */
 	while (config->base->FIFOCN_b.TCNT)
@@ -49,10 +49,10 @@ static void uart_sim3_poll_out(struct device *dev, unsigned char c)
 	config->base->DATA.U8 = c;
 }
 
-static int uart_sim3_err_check(struct device *dev)
+static int uart_sim3_err_check(const struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
-	u32_t flags = config->base->CONTROL;
+	const struct uart_sim3_config *config = dev->config;
+	uint32_t flags = config->base->CONTROL;
 	int err = 0;
 
 	if (flags & UART_CONTROL_ROREI_Msk) {
@@ -73,11 +73,11 @@ static int uart_sim3_err_check(struct device *dev)
 }
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
-static int uart_sim3_fifo_fill(struct device *dev, const u8_t *tx_data,
+static int uart_sim3_fifo_fill(const struct device *dev, const uint8_t *tx_data,
 			       int len)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
-	u8_t num_tx = 0U;
+	const struct uart_sim3_config *config = dev->config;
+	uint8_t num_tx = 0U;
 
 	while ((len - num_tx > 0) && (config->base->FIFOCN_b.TCNT == 0)) {
 		config->base->DATA.U8 = tx_data[num_tx++];
@@ -86,11 +86,11 @@ static int uart_sim3_fifo_fill(struct device *dev, const u8_t *tx_data,
 	return num_tx;
 }
 
-static int uart_sim3_fifo_read(struct device *dev, u8_t *rx_data,
+static int uart_sim3_fifo_read(const struct device *dev, uint8_t *rx_data,
 			       const int len)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
-	u8_t num_rx = 0U;
+	const struct uart_sim3_config *config = dev->config;
+	uint8_t num_rx = 0U;
 
 	while ((len - num_rx > 0) &&
 	       (num_rx < config->base->FIFOCN_b.RCNT)) {
@@ -101,58 +101,58 @@ static int uart_sim3_fifo_read(struct device *dev, u8_t *rx_data,
 	return num_rx;
 }
 
-static void uart_sim3_irq_tx_enable(struct device *dev)
+static void uart_sim3_irq_tx_enable(const struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
+	const struct uart_sim3_config *config = dev->config;
 
 	/* Enable the transmit complete interrupt */
 	config->base->CONTROL_SET = UART_CONTROL_TCPTIEN_Msk | UART_CONTROL_TDREQIEN_Msk;
 }
 
-static void uart_sim3_irq_tx_disable(struct device *dev)
+static void uart_sim3_irq_tx_disable(const struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
+	const struct uart_sim3_config *config = dev->config;
 
 	config->base->CONTROL_CLR = UART_CONTROL_TCPTIEN_Msk | UART_CONTROL_TDREQIEN_Msk;
 }
 
-static int uart_sim3_irq_tx_complete(struct device *dev)
+static int uart_sim3_irq_tx_complete(const struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
-	u32_t flags = config->base->CONTROL;
+	const struct uart_sim3_config *config = dev->config;
+	uint32_t flags = config->base->CONTROL;
 
 	config->base->CONTROL_CLR = UART_CONTROL_TCPTI_Msk;
 
 	return (flags & UART_CONTROL_TCPTI_Msk) != 0;
 }
 
-static int uart_sim3_irq_tx_ready(struct device *dev)
+static int uart_sim3_irq_tx_ready(const struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
-	u32_t flags = config->base->CONTROL;
+	const struct uart_sim3_config *config = dev->config;
+	uint32_t flags = config->base->CONTROL;
 
 	config->base->CONTROL_CLR = UART_CONTROL_TDREQI_Msk;
 
 	return (flags & UART_CONTROL_TDREQI_Msk) != 0;
 }
 
-static void uart_sim3_irq_rx_enable(struct device *dev)
+static void uart_sim3_irq_rx_enable(const struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
+	const struct uart_sim3_config *config = dev->config;
 
 	config->base->CONTROL_SET = UART_CONTROL_RDREQIEN_Msk;
 }
 
-static void uart_sim3_irq_rx_disable(struct device *dev)
+static void uart_sim3_irq_rx_disable(const struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
+	const struct uart_sim3_config *config = dev->config;
 
 	config->base->CONTROL_CLR = UART_CONTROL_RDREQIEN_Msk;
 }
 
-static int uart_sim3_irq_rx_full(struct device *dev)
+static int uart_sim3_irq_rx_full(const struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
+	const struct uart_sim3_config *config = dev->config;
 	int flag = config->base->CONTROL_b.RDREQI;
 
 	config->base->CONTROL_CLR = UART_CONTROL_RDREQI_Msk;
@@ -162,21 +162,21 @@ static int uart_sim3_irq_rx_full(struct device *dev)
 
 static int uart_sim3_irq_rx_ready(struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
+	const struct uart_sim3_config *config = dev->config;
 
 	return config->base->CONTROL_b.RDREQIEN && uart_sim3_irq_rx_full(dev);
 }
 
-static void uart_sim3_irq_err_enable(struct device *dev)
+static void uart_sim3_irq_err_enable(const struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
+	const struct uart_sim3_config *config = dev->config;
 
 	config->base->CONTROL_SET = UART_CONTROL_RERIEN_Msk;
 }
 
-static void uart_sim3_irq_err_disable(struct device *dev)
+static void uart_sim3_irq_err_disable(const struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
+	const struct uart_sim3_config *config = dev->config;
 
 	config->base->CONTROL_CLR = UART_CONTROL_RERIEN_Msk;
 }
@@ -186,12 +186,12 @@ static int uart_sim3_irq_is_pending(struct device *dev)
 	return uart_sim3_irq_tx_ready(dev) || uart_sim3_irq_rx_ready(dev);
 }
 
-static int uart_sim3_irq_update(struct device *dev)
+static int uart_sim3_irq_update(const struct device *dev)
 {
 	return 1;
 }
 
-static void uart_sim3_irq_callback_set(struct device *dev,
+static void uart_sim3_irq_callback_set(const struct device *dev,
 				       uart_irq_callback_user_data_t cb,
 				       void *cb_data)
 {
@@ -212,9 +212,9 @@ static void uart_sim3_isr(void *arg)
 }
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */
 
-static void uart_sim3_init_pins(struct device *dev)
+static void uart_sim3_init_pins(const struct device *dev)
 {
-	u8_t pin = 0;
+	uint8_t pin = 0;
 	/* Configure PB0.00 as digital output. */
 	PBSTD0->PB_CLR      = (1U << pin); /* Set to 0. */
 	PBSTD0->PBOUTMD_SET = (1U << pin); /* push-pull */
@@ -232,17 +232,17 @@ static void uart_sim3_init_pins(struct device *dev)
 
 #define N (2)
 #define CALC_BAUDRATE(baudrate)					\
-    (u32_t)((u32_t)(SystemCoreClock / (N * (u32_t)baudrate)) -1 )
+    (uint32_t)((uint32_t)(SystemCoreClock / (N * (uint32_t)baudrate)) -1 )
 
 #if 0
 #define CALC_BAUDRATE(baudrate)				\
-   (u32_t)((u32_t)(20000000 / (N * (u32_t)baudrate)) -1 )
+   (uint32_t)((uint32_t)(20000000 / (N * (uint32_t)baudrate)) -1 )
 #endif
 
 static int uart_sim3_init(struct device *dev)
 {
-	const struct uart_sim3_config *config = dev->config->config_info;
-	const u16_t baud = CALC_BAUDRATE(config->baud_rate);
+	const struct uart_sim3_config *config = dev->config;
+	const uint16_t baud = CALC_BAUDRATE(config->baud_rate);
 
 	/* The peripheral and gpio clocks are already enabled from soc and gpio
 	 * driver.

@@ -1,5 +1,5 @@
 ---
-title: SIM3 UART
+description: SIM3 UART
 compatible: "silabs,sim3-uart"
 
 description: >

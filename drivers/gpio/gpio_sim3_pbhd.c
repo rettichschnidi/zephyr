@@ -5,14 +5,14 @@
  */
 
 #include <errno.h>
-#include <gpio.h>
+#include <drivers/gpio.h>
 #include <soc.h>
 
 #include "gpio_sim3.h"
 #include "gpio_utils.h"
 
-static int gpio_sim3_pbhd_write(struct device *dev, int access_op, u32_t pin,
-				u32_t value)
+static int gpio_sim3_pbhd_write(struct device *dev, int access_op, uint32_t pin,
+				uint32_t value)
 {
 	const struct gpio_sim3_config *config = dev->config->config_info;
 	PBHD_Type *gpio_base = config->gpio_base;
@@ -39,8 +39,8 @@ static int gpio_sim3_pbhd_write(struct device *dev, int access_op, u32_t pin,
 	return 0;
 }
 
-static int gpio_sim3_pbhd_read(struct device *dev, int access_op, u32_t pin,
-			       u32_t *value)
+static int gpio_sim3_pbhd_read(struct device *dev, int access_op, uint32_t pin,
+			       uint32_t *value)
 {
 	const struct gpio_sim3_config *config = dev->config->config_info;
 	PBHD_Type *gpio_base = config->gpio_base;
@@ -56,12 +56,13 @@ static int gpio_sim3_pbhd_read(struct device *dev, int access_op, u32_t pin,
 	return 0;
 }
 
-static inline int gpio_sim3_pbhd_configure(struct device *dev, int access_op,
-					   u32_t pin, int flags)
+static inline int gpio_sim3_pbhd_pin_configure(const struct device *port,
+					       gpio_pin_t pin,
+					       gpio_flags_t flags);
 {
 	const struct gpio_sim3_config *config = dev->config->config_info;
 	PBHD_Type *gpio_base = config->gpio_base;
-	const int common = gpio_sim3_configure(dev, access_op, pin, flags);
+	const int common = gpio_sim3_pin_configure(dev, pin, flags);
 
 	if (common < 0) {
 		return common;
@@ -115,7 +116,7 @@ static inline int gpio_sim3_pbhd_configure(struct device *dev, int access_op,
 }
 
 static const struct gpio_driver_api gpio_sim3_pbhd_driver_api = {
-	.config = gpio_sim3_pbhd_configure,
+	.pin_configure = gpio_sim3_pbhd_pin_configure,
 	.write = gpio_sim3_pbhd_write,
 	.read = gpio_sim3_pbhd_read
 };

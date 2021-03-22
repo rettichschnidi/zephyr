@@ -1,5 +1,5 @@
 ---
-title: SIM3 GPIO
+description: SIM3 GPIO
 compatible: "silabs,sim3-gpio"
 
 description: >

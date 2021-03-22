@@ -6,7 +6,7 @@
 
 #include <init.h>
 #include "board.h"
-#include <gpio.h>
+#include <drivers/gpio.h>
 #include <misc/printk.h>
 
 static int GARDENA_SGRMT1_init(struct device *dev)

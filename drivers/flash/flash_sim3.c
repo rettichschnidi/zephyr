@@ -29,8 +29,8 @@ struct flash_sim3_data {
 
 enum { FLASH_PAGE_SIZE = 1024 };
 
-static bool write_range_is_valid(off_t offset, u32_t size);
-static bool read_range_is_valid(off_t offset, u32_t size);
+static bool write_range_is_valid(off_t offset, uint32_t size);
+static bool read_range_is_valid(off_t offset, uint32_t size);
 
 static void unlock_flash_multiple_op(void)
 {
@@ -56,7 +56,7 @@ static int flash_sim3_read(struct device *dev, off_t offset, void *data,
 		return 0;
 	}
 
-	memcpy(data, (u8_t *)CONFIG_FLASH_BASE_ADDRESS + offset, size);
+	memcpy(data, (uint8_t *)CONFIG_FLASH_BASE_ADDRESS + offset, size);
 
 	return 0;
 }
@@ -74,8 +74,8 @@ static int flash_sim3_write(struct device *dev, const off_t offset,
 		return 0;
 	}
 
-	const u8_t *write_base = (u8_t *)CONFIG_FLASH_BASE_ADDRESS + offset;
-	const u8_t *source_base = (const u8_t *)data;
+	const uint8_t *write_base = (uint8_t *)CONFIG_FLASH_BASE_ADDRESS + offset;
+	const uint8_t *source_base = (const uint8_t *)data;
 
 	k_mutex_lock(&dev_data->mutex, K_FOREVER);
 
@@ -84,10 +84,10 @@ static int flash_sim3_write(struct device *dev, const off_t offset,
 
 	unlock_flash_multiple_op();
 	for (off_t write_offset = 0; write_offset < size;
-	     write_offset += sizeof(u16_t)) {
+	     write_offset += sizeof(uint16_t)) {
 		FLASHCTRL0->WRADDR = (uint32_t)(write_base + write_offset);
 		FLASHCTRL0->WRDATA =
-			*(const u16_t *)(source_base + write_offset);
+			*(const uint16_t *)(source_base + write_offset);
 	}
 	lock_flash();
 	irq_unlock(key);
@@ -164,13 +164,13 @@ static int flash_sim3_write_protection(struct device *dev, bool enable)
  * - A flash address to write to must be aligned to half-words.
  * - Number of bytes to write must be divisible by 2.
  */
-static bool write_range_is_valid(off_t offset, u32_t size)
+static bool write_range_is_valid(off_t offset, uint32_t size)
 {
 	return read_range_is_valid(offset, size) &&
-	       (offset % sizeof(u16_t) == 0) && (size % 2 == 0);
+	       (offset % sizeof(uint16_t) == 0) && (size % 2 == 0);
 }
 
-static bool read_range_is_valid(off_t offset, u32_t size)
+static bool read_range_is_valid(off_t offset, uint32_t size)
 {
 	return (offset + size) <= (CONFIG_FLASH_SIZE * 1024);
 }
