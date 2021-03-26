@@ -29,6 +29,9 @@ interface and listing all issues with the `bug label
 API Changes
 ***********
 
+* The :c:func:`wait_for_usb_dfu` function now accepts a ``k_timeout_t`` argument instead of
+  using the ``CONFIG_USB_DFU_WAIT_DELAY_MS`` macro.
+
 Deprecated in this release
 
 * :c:macro:`DT_CLOCKS_LABEL_BY_IDX`, :c:macro:`DT_CLOCKS_LABEL_BY_NAME`,
@@ -51,14 +54,43 @@ Deprecated in this release
   :c:macro:`DT_INST_IO_CHANNELS_LABEL` were deprecated in favor of utilizing
   :c:macro:`DT_IO_CHANNELS_CTLR` and variants.
 
+* :c:macro:`DT_DMAS_LABEL_BY_IDX`,
+  :c:macro:`DT_DMAS_LABEL_BY_NAME`,
+  :c:macro:`DT_INST_DMAS_LABEL_BY_IDX`, and
+  :c:macro:`DT_INST_DMAS_LABEL_BY_NAME` were deprecated in favor of utilizing
+  :c:macro:`DT_DMAS_CTLR` and variants.
+
 * USB HID specific macros in ``<include/usb/class/usb_hid.h>`` are deprecated
   in favor of new common HID macros defined in ``<include/usb/class/hid.h>``.
+
+* USB HID Kconfig option USB_HID_PROTOCOL_CODE is deprecated.
+  USB_HID_PROTOCOL_CODE does not allow to set boot protocol code for specific
+  HID device. USB HID API function usb_hid_set_proto_code() can be used instead.
+
+* The ``CONFIG_OPENOCD_SUPPORT`` Kconfig option has been deprecated in favor
+  of ``CONFIG_DEBUG_THREAD_INFO``.
+
+* Disk drivers (``disk_access_*.c``) are moved to ``drivers/disk`` and renamed
+  according to their function. Driver's Kconfig options are revised and renamed.
+  SDMMC host controller drivers are selected when the corresponding node
+  in devicetree is enabled. Following application relevant Kconfig options
+  are renamed: ``CONFIG_DISK_ACCESS_RAM`` -> `CONFIG_DISK_DRIVER_RAM`,
+  ``CONFIG_DISK_ACCESS_FLASH`` -> `CONFIG_DISK_DRIVER_FLASH`,
+  ``CONFIG_DISK_ACCESS_SDHC`` -> `CONFIG_DISK_DRIVER_SDMMC`.
+  Disk API header ``<include/disk/disk_access.h>`` is deprecated in favor of
+  ``<include/storage/disk_access.h>``.
 
 ==========================
 
 Removed APIs in this release
 
 * Removed support for the old zephyr integer typedefs (u8_t, u16_t, etc...).
+
+* Removed support for k_mem_domain_destroy and k_mem_domain_remove_thread
+
+* Removed support for counter_read and counter_get_max_relative_alarm
+
+* Removed support for device_list_get
 
 ============================
 
@@ -78,6 +110,8 @@ Architectures
   * AARCH32
 
     * Added support for null pointer dereferencing detection in Cortex-M.
+
+    * Added initial support for Arm v8.1-m and Cortex-M55
 
   * AARCH64
 
@@ -101,6 +135,8 @@ Boards & SoC Support
 * Changes for ARC boards:
 
 * Added support for these ARM boards:
+
+   * MPS3-AN547
 
 * Removed support for these ARM boards:
 

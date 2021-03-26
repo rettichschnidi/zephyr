@@ -67,6 +67,9 @@ config AARCH64_IMAGE_HEADER
 config PRIVILEGED_STACK_SIZE
 	default 4096
 
+config KOBJECT_TEXT_AREA
+	default 512 if TEST
+
 if CPU_CORTEX_A
 
 config ARMV8_A_NS
@@ -79,6 +82,7 @@ config ARMV8_A
 	bool
 	select ATOMIC_OPERATIONS_BUILTIN
 	select CPU_HAS_MMU
+	select ARCH_HAS_USERSPACE if ARM_MMU
 	help
 	  This option signifies the use of an ARMv8-A processor
 	  implementation.
@@ -105,6 +109,8 @@ config ARM_MMU
 	default y
 	select MMU
 	select SRAM_REGION_PERMISSIONS
+	select ARCH_MEM_DOMAIN_SYNCHRONOUS_API if USERSPACE
+	select ARCH_MEM_DOMAIN_DATA if USERSPACE
 	help
 	  Memory Management Unit support.
 
@@ -127,6 +133,7 @@ config MMU_PAGE_SIZE
 
 config MAX_XLAT_TABLES
 	int "Maximum numbers of translation tables"
+	default 16 if USERSPACE
 	default 8
 	help
 	  This option specifies the maximum numbers of translation tables.

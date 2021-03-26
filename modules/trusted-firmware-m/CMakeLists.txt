@@ -88,7 +88,7 @@ function(trusted_firmware_build)
   endif()
 
   set(VENEERS_FILE ${TFM_BINARY_DIR}/secure_fw/s_veneers.o)
-  set(PSA_API_NS_PATH ${TFM_BINARY_DIR}/interface/libpsa_api_ns.a)
+  set(TFM_API_NS_PATH ${TFM_BINARY_DIR}/app/libtfm_api_ns.a)
   set(TFM_GENERATED_INCLUDES ${TFM_BINARY_DIR}/generated/interface/include)
 
   if(TFM_BL2)
@@ -105,7 +105,7 @@ function(trusted_firmware_build)
 
   set(BUILD_BYPRODUCTS
     ${VENEERS_FILE}
-    ${PSA_API_NS_PATH}
+    ${TFM_API_NS_PATH}
     ${TFM_GENERATED_INCLUDES}/psa_manifest/sid.h
     ${BL2_BIN_FILE}
     ${BL2_HEX_FILE}
@@ -197,7 +197,7 @@ function(trusted_firmware_build)
     PUBLIC
     zephyr_interface
     INTERFACE
-    ${PSA_API_NS_PATH}
+    ${TFM_API_NS_PATH}
     ${VENEERS_FILE}
     $<TARGET_FILE:tfm_api>
   )
@@ -278,6 +278,14 @@ if (CONFIG_BUILD_WITH_TFM)
     set(TFM_PUBLIC_KEY_FORMAT "full")
   endif()
 
+  if(DEFINED TFM_HEX_BASE_ADDRESS_S)
+    set(HEX_ADDR_ARGS_S "--hex-addr=${TFM_HEX_BASE_ADDRESS_S}")
+  endif()
+
+  if(DEFINED TFM_HEX_BASE_ADDRESS_NS)
+    set(HEX_ADDR_ARGS_NS "--hex-addr=${TFM_HEX_BASE_ADDRESS_NS}")
+  endif()
+
   function(tfm_sign OUT_ARG SUFFIX PAD INPUT_FILE OUTPUT_FILE)
     if(PAD)
       set(pad_args --pad --pad-header)
@@ -290,6 +298,7 @@ if (CONFIG_BUILD_WITH_TFM)
       --align 1
       -v ${TFM_IMAGE_VERSION_${SUFFIX}}
       ${pad_args}
+      ${HEX_ADDR_ARGS_${SUFFIX}}
       ${ADD_${SUFFIX}_IMAGE_MIN_VER}
       -s auto
       -H ${CONFIG_ROM_START_OFFSET}
