@@ -1,0 +1,17 @@
+---
+description: SIM3 UART
+compatible: "silabs,sim3-uart"
+
+description: >
+    This binding gives a base representation of the SIM3 UART
+
+include: uart-controller.yaml
+
+properties:
+    reg:
+      required: true
+
+    interrupts:
+      required: true
+
+...

@@ -1,0 +1,13 @@
+# Kconfig - GARDENA SGRMT1 board
+#
+# Copyright (c) 2019 Reto Schneider
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+if BOARD_GARDENA_SGRMT1
+
+config BOARD
+	default "GARDENA_SGRMT1"
+
+endif # BOARD_GARDENA_SGRMT1
