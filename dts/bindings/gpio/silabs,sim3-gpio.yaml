@@ -1,0 +1,29 @@
+---
+description: SIM3 GPIO
+compatible: "silabs,sim3-gpio"
+
+description: >
+    This is a representation of the SIM3 GPIO nodes
+
+include: base.yaml
+
+properties:
+    compatible:
+      required: true
+      description: compatible strings
+
+    reg:
+      type: array
+      description: mmio register space
+      required: true
+
+    interrupts:
+      required: true
+      description: required interrupts
+
+    label:
+      type: string
+      required: true
+      description: Human readable string describing the device (used by Zephyr for API name)
+
+...
