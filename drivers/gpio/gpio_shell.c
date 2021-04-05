@@ -70,12 +70,14 @@ static int cmd_gpio_conf(const struct shell *shell, size_t argc, char **argv)
 
 	dev = device_get_binding(argv[args_indx.port]);
 
-	if (dev != NULL) {
-		index = (uint8_t)atoi(argv[args_indx.index]);
-		shell_print(shell, "Configuring %s pin %d",
-			    argv[args_indx.port], index);
-		gpio_pin_configure(dev, index, type);
+	if (!dev) {
+		shell_error(shell, "Didn't find device %s", argv[args_indx.port]);
+		return -EINVAL;
 	}
+
+	index = (uint8_t)atoi(argv[args_indx.index]);
+	shell_print(shell, "Configuring %s pin %d", argv[args_indx.port], index);
+	gpio_pin_configure(dev, index, type);
 
 	return 0;
 }
