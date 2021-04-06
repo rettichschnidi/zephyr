@@ -10,7 +10,7 @@
 #include <errno.h>
 #include <kernel.h>
 #include <device.h>
-#include <flash.h>
+#include <drivers/flash.h>
 #include <soc.h>
 #include <irq.h>
 #include <stdbool.h>
@@ -19,13 +19,13 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(flash_sim3);
 
+#define DT_DRV_COMPAT silabs_sim3_flash_controller
+#define SOC_NV_FLASH_NODE DT_INST(0, soc_nv_flash)
+
 struct flash_sim3_data {
 	struct k_mutex mutex;
 	bool locked;
 };
-
-#define DEV_NAME(dev) ((dev)->config->name)
-#define DEV_DATA(dev) ((struct flash_sim3_data *const)(dev)->driver_data)
 
 enum { FLASH_PAGE_SIZE = 1024 };
 
@@ -43,7 +43,7 @@ static void lock_flash(void)
 	FLASHCTRL0->KEY = 0x5A;
 }
 
-static int flash_sim3_read(struct device *dev, off_t offset, void *data,
+static int flash_sim3_read(const struct device *dev, off_t offset, void *data,
 			   size_t size)
 {
 	(void)dev;
@@ -61,10 +61,10 @@ static int flash_sim3_read(struct device *dev, off_t offset, void *data,
 	return 0;
 }
 
-static int flash_sim3_write(struct device *dev, const off_t offset,
+static int flash_sim3_write(const struct device *dev, const off_t offset,
 			    const void *const data, const size_t size)
 {
-	struct flash_sim3_data *const dev_data = DEV_DATA(dev);
+	struct flash_sim3_data *const dev_data = dev->data;
 
 	if (!write_range_is_valid(offset, size)) {
 		return -EINVAL;
@@ -74,7 +74,8 @@ static int flash_sim3_write(struct device *dev, const off_t offset,
 		return 0;
 	}
 
-	const uint8_t *write_base = (uint8_t *)CONFIG_FLASH_BASE_ADDRESS + offset;
+	const uint8_t *write_base =
+		(uint8_t *)CONFIG_FLASH_BASE_ADDRESS + offset;
 	const uint8_t *source_base = (const uint8_t *)data;
 
 	k_mutex_lock(&dev_data->mutex, K_FOREVER);
@@ -97,9 +98,9 @@ static int flash_sim3_write(struct device *dev, const off_t offset,
 	return 0;
 }
 
-static int flash_sim3_erase(struct device *dev, off_t offset, size_t size)
+static int flash_sim3_erase(const struct device *dev, off_t offset, size_t size)
 {
-	struct flash_sim3_data *const dev_data = DEV_DATA(dev);
+	struct flash_sim3_data *const dev_data = dev->data;
 	int irq_key;
 
 	if (!write_range_is_valid(offset, size)) {
@@ -142,9 +143,9 @@ static int flash_sim3_erase(struct device *dev, off_t offset, size_t size)
 	return 0;
 }
 
-static int flash_sim3_write_protection(struct device *dev, bool enable)
+static int flash_sim3_write_protection(const struct device *dev, bool enable)
 {
-	struct flash_sim3_data *const dev_data = DEV_DATA(dev);
+	struct flash_sim3_data *const dev_data = dev->data;
 
 	k_mutex_lock(&dev_data->mutex, K_FOREVER);
 
@@ -175,9 +176,9 @@ static bool read_range_is_valid(off_t offset, uint32_t size)
 	return (offset + size) <= (CONFIG_FLASH_SIZE * 1024);
 }
 
-static int flash_sim3_init(struct device *dev)
+static int flash_sim3_init(const struct device *dev)
 {
-	struct flash_sim3_data *const dev_data = DEV_DATA(dev);
+	struct flash_sim3_data *const dev_data = dev->data;
 
 	k_mutex_init(&dev_data->mutex);
 
@@ -192,9 +193,20 @@ static int flash_sim3_init(struct device *dev)
 	/* Lock the flash. */
 	flash_sim3_write_protection(dev, true);
 
-	LOG_INF("Device %s initialized", DEV_NAME(dev));
+	LOG_INF("Device %s initialized", dev->name);
 
 	return 0;
+}
+
+static const struct flash_parameters flash_sim3_parameters = {
+	.write_block_size = DT_PROP(SOC_NV_FLASH_NODE, write_block_size),
+	.erase_value = 0xff,
+};
+
+const struct flash_parameters *
+flash_sim3_get_parameters(const struct device *dev)
+{
+	return &flash_sim3_parameters;
 }
 
 static const struct flash_driver_api flash_sim3_driver_api = {
@@ -205,11 +217,12 @@ static const struct flash_driver_api flash_sim3_driver_api = {
 	/* FLASH_WRITE_BLOCK_SIZE is extracted from device tree as flash node
 	 * property 'write-block-size'.
 	 */
-	.write_block_size = DT_FLASH_WRITE_BLOCK_SIZE,
+	.get_parameters = flash_sim3_get_parameters,
 };
 
 static struct flash_sim3_data flash_sim3_0_data;
 
-DEVICE_AND_API_INIT(flash_sim3_0, DT_FLASH_DEV_NAME, flash_sim3_init,
-		    &flash_sim3_0_data, NULL, POST_KERNEL,
-		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &flash_sim3_driver_api);
+DEVICE_DT_INST_DEFINE(0, flash_sim3_init, device_pm_control_nop,
+		      &flash_sim3_0_data, NULL, POST_KERNEL,
+		      CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		      &flash_sim3_driver_api);
