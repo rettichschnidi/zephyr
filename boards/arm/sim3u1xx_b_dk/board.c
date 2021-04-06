@@ -9,7 +9,7 @@
 #include <drivers/gpio.h>
 #include <sys/printk.h>
 
-static int sim3u1xx_b_dk_init(struct device *dev)
+static int sim3u1xx_b_dk_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 

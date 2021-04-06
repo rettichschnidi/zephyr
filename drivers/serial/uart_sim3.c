@@ -8,6 +8,7 @@
 #include <drivers/uart.h>
 #include <soc.h>
 
+#define DT_DRV_COMPAT silabs_sim3_uart
 
 struct uart_sim3_config {
 	UART_Type *base;
@@ -66,8 +67,10 @@ static int uart_sim3_err_check(const struct device *dev)
 	if (flags & UART_CONTROL_RFRMERI_Msk) {
 		err |= UART_ERROR_FRAMING;
 	}
-	
-	config->base->CONTROL_CLR = UART_CONTROL_RFRMERI_Msk | UART_CONTROL_RPARERI_Msk | UART_CONTROL_ROREI_Msk;
+
+	config->base->CONTROL_CLR = UART_CONTROL_RFRMERI_Msk |
+				    UART_CONTROL_RPARERI_Msk |
+				    UART_CONTROL_ROREI_Msk;
 
 	return err;
 }
@@ -92,9 +95,7 @@ static int uart_sim3_fifo_read(const struct device *dev, uint8_t *rx_data,
 	const struct uart_sim3_config *config = dev->config;
 	uint8_t num_rx = 0U;
 
-	while ((len - num_rx > 0) &&
-	       (num_rx < config->base->FIFOCN_b.RCNT)) {
-
+	while ((len - num_rx > 0) && (num_rx < config->base->FIFOCN_b.RCNT)) {
 		rx_data[num_rx++] = config->base->DATA.U8;
 	}
 
@@ -106,14 +107,16 @@ static void uart_sim3_irq_tx_enable(const struct device *dev)
 	const struct uart_sim3_config *config = dev->config;
 
 	/* Enable the transmit complete interrupt */
-	config->base->CONTROL_SET = UART_CONTROL_TCPTIEN_Msk | UART_CONTROL_TDREQIEN_Msk;
+	config->base->CONTROL_SET =
+		UART_CONTROL_TCPTIEN_Msk | UART_CONTROL_TDREQIEN_Msk;
 }
 
 static void uart_sim3_irq_tx_disable(const struct device *dev)
 {
 	const struct uart_sim3_config *config = dev->config;
 
-	config->base->CONTROL_CLR = UART_CONTROL_TCPTIEN_Msk | UART_CONTROL_TDREQIEN_Msk;
+	config->base->CONTROL_CLR =
+		UART_CONTROL_TCPTIEN_Msk | UART_CONTROL_TDREQIEN_Msk;
 }
 
 static int uart_sim3_irq_tx_complete(const struct device *dev)
@@ -156,7 +159,7 @@ static int uart_sim3_irq_rx_full(const struct device *dev)
 	int flag = config->base->CONTROL_b.RDREQI;
 
 	config->base->CONTROL_CLR = UART_CONTROL_RDREQI_Msk;
-	
+
 	return flag;
 }
 
@@ -216,14 +219,14 @@ static void uart_sim3_init_pins(const struct device *dev)
 {
 	uint8_t pin = 0;
 	/* Configure PB0.00 as digital output. */
-	PBSTD0->PB_CLR      = (1U << pin); /* Set to 0. */
+	PBSTD0->PB_CLR = (1U << pin); /* Set to 0. */
 	PBSTD0->PBOUTMD_SET = (1U << pin); /* push-pull */
 
 	pin = 1;
 	PBSTD0->PBMDSEL_SET = (1U << pin); /* digital mode */
 	/* Configure PB0.01 as digital input */
 	PBSTD0->PBOUTMD_CLR = (1U << pin); /* Recommended for input mode. */
-	PBSTD0->PB_SET      = (1U << pin); /* Recommended for input mode. */
+	PBSTD0->PB_SET = (1U << pin); /* Recommended for input mode. */
 	PBSTD0->PBMDSEL_SET = (1U << pin); /* Set digital mode. */
 
 	/* Enable UART0EN in xbar0. */
@@ -231,15 +234,15 @@ static void uart_sim3_init_pins(const struct device *dev)
 }
 
 #define N (2)
-#define CALC_BAUDRATE(baudrate)					\
-    (uint32_t)((uint32_t)(SystemCoreClock / (N * (uint32_t)baudrate)) -1 )
+#define CALC_BAUDRATE(baudrate)                                                \
+	(uint32_t)((uint32_t)(SystemCoreClock / (N * (uint32_t)baudrate)) - 1)
 
 #if 0
-#define CALC_BAUDRATE(baudrate)				\
-   (uint32_t)((uint32_t)(20000000 / (N * (uint32_t)baudrate)) -1 )
+#define CALC_BAUDRATE(baudrate)                                                \
+	(uint32_t)((uint32_t)(20000000 / (N * (uint32_t)baudrate)) - 1)
 #endif
 
-static int uart_sim3_init(struct device *dev)
+static int uart_sim3_init(const struct device *dev)
 {
 	const struct uart_sim3_config *config = dev->config;
 	const uint16_t baud = CALC_BAUDRATE(config->baud_rate);
@@ -298,10 +301,10 @@ static void uart_sim3_config_func_0(struct device *dev);
 #endif
 
 static const struct uart_sim3_config uart_sim3_0_config = {
-	.base = (UART_Type *)DT_SILABS_SIM3_UART_UART_0_BASE_ADDRESS,
+	.base = (UART_Type *)DT_INST_REG_ADDR(0),
 	// .clock = cmuClock_UART0,
-	.baud_rate = DT_SILABS_SIM3_UART_UART_0_CURRENT_SPEED,
-	//.loc = DT_SILABS_SIM3_UART_UART_0_LOCATION,
+	.baud_rate = DT_INST_PROP(0, current_speed),
+//.loc = DT_SILABS_SIM3_UART_UART_0_LOCATION,
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.irq_config_func = uart_sim3_config_func_0,
 #endif
@@ -309,9 +312,10 @@ static const struct uart_sim3_config uart_sim3_0_config = {
 
 static struct uart_sim3_data uart_sim3_0_data;
 
-DEVICE_AND_API_INIT(uart_0, DT_SILABS_SIM3_UART_UART_0_LABEL, &uart_sim3_init,
-		    &uart_sim3_0_data, &uart_sim3_0_config, PRE_KERNEL_1,
-		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &uart_sim3_driver_api);
+DEVICE_DT_INST_DEFINE(0, uart_sim3_init, device_pm_control_nop,
+		      &uart_sim3_0_data, &uart_sim3_0_config, PRE_KERNEL_1,
+		      CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		      &uart_sim3_driver_api);
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 static void uart_sim3_config_func_0(struct device *dev)
@@ -333,10 +337,10 @@ static void uart_sim3_config_func_1(struct device *dev);
 #endif
 
 static const struct uart_sim3_config uart_sim3_1_config = {
-	.base = (USART_TypeDef *)DT_SILABS_SIM3_UART_UART_1_BASE_ADDRESS,
-	.clock = cmuClock_UART1,
-	.baud_rate = DT_SILABS_SIM3_UART_UART_1_CURRENT_SPEED,
-	.loc = DT_SILABS_SIM3_UART_UART_1_LOCATION,
+	.base = (UART_Type *)DT_INST_REG_ADDR(1),
+	//	.clock = cmuClock_UART1,
+	.baud_rate = DT_INST_PROP(1, current_speed),
+//	.loc = DT_SILABS_SIM3_UART_UART_1_LOCATION,
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	.irq_config_func = uart_sim3_config_func_1,
 #endif
@@ -344,9 +348,10 @@ static const struct uart_sim3_config uart_sim3_1_config = {
 
 static struct uart_sim3_data uart_sim3_1_data;
 
-DEVICE_AND_API_INIT(uart_1, DT_SILABS_SIM3_UART_UART_1_LABEL, &uart_sim3_init,
-		    &uart_sim3_1_data, &uart_sim3_1_config, PRE_KERNEL_1,
-		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &uart_sim3_driver_api);
+DEVICE_DT_INST_DEFINE(1, uart_sim3_init, device_pm_control_nop,
+		      &uart_sim3_1_data, &uart_sim3_1_config, PRE_KERNEL_1,
+		      CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
+		      &uart_sim3_driver_api);
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 static void uart_sim3_config_func_1(struct device *dev)
@@ -360,83 +365,3 @@ static void uart_sim3_config_func_1(struct device *dev)
 #endif
 
 #endif /* CONFIG_UART_SIM3_1 */
-
-#ifdef CONFIG_USART_SIM3_0
-
-#ifdef CONFIG_UART_INTERRUPT_DRIVEN
-static void usart_sim3_config_func_0(struct device *dev);
-#endif
-
-static const struct uart_sim3_config usart_sim3_0_config = {
-	.base = (USART_TypeDef *)DT_SILABS_SIM3_USART_USART_0_BASE_ADDRESS,
-	.clock = cmuClock_USART0,
-	.baud_rate = DT_SILABS_SIM3_USART_USART_0_CURRENT_SPEED,
-	.loc = DT_SILABS_SIM3_USART_USART_0_LOCATION,
-#ifdef CONFIG_UART_INTERRUPT_DRIVEN
-	.irq_config_func = usart_sim3_config_func_0,
-#endif
-};
-
-static struct uart_sim3_data usart_sim3_0_data;
-
-DEVICE_AND_API_INIT(usart_0, DT_SILABS_SIM3_USART_USART_0_LABEL,
-		    &uart_sim3_init, &usart_sim3_0_data,
-		    &usart_sim3_0_config, PRE_KERNEL_1,
-		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &uart_sim3_driver_api);
-
-#ifdef CONFIG_UART_INTERRUPT_DRIVEN
-static void usart_sim3_config_func_0(struct device *dev)
-{
-	IRQ_CONNECT(DT_SILABS_SIM3_USART_USART_0_IRQ_RX,
-		    DT_SILABS_SIM3_USART_USART_0_IRQ_RX_PRIORITY,
-		    uart_sim3_isr, DEVICE_GET(usart_0), 0);
-	IRQ_CONNECT(DT_SILABS_SIM3_USART_USART_0_IRQ_TX,
-		    DT_SILABS_SIM3_USART_USART_0_IRQ_TX_PRIORITY,
-		    uart_sim3_isr, DEVICE_GET(usart_0), 0);
-
-	irq_enable(DT_SILABS_SIM3_USART_USART_0_IRQ_RX);
-	irq_enable(DT_SILABS_SIM3_USART_USART_0_IRQ_TX);
-}
-#endif
-
-#endif /* CONFIG_USART_SIM3_0 */
-
-#ifdef CONFIG_USART_SIM3_1
-
-#ifdef CONFIG_UART_INTERRUPT_DRIVEN
-static void usart_sim3_config_func_1(struct device *dev);
-#endif
-
-static const struct uart_sim3_config usart_sim3_1_config = {
-	.base = (USART_TypeDef *)DT_SILABS_SIM3_USART_USART_1_BASE_ADDRESS,
-	.clock = cmuClock_USART1,
-	.baud_rate = DT_SILABS_SIM3_USART_USART_1_CURRENT_SPEED,
-	.loc = DT_SILABS_SIM3_USART_USART_1_LOCATION,
-#ifdef CONFIG_UART_INTERRUPT_DRIVEN
-	.irq_config_func = usart_sim3_config_func_1,
-#endif
-};
-
-static struct uart_sim3_data usart_sim3_1_data;
-
-DEVICE_AND_API_INIT(usart_1, DT_SILABS_SIM3_USART_USART_1_LABEL,
-		    &uart_sim3_init, &usart_sim3_1_data,
-		    &usart_sim3_1_config, PRE_KERNEL_1,
-		    CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &uart_sim3_driver_api);
-
-#ifdef CONFIG_UART_INTERRUPT_DRIVEN
-static void usart_sim3_config_func_1(struct device *dev)
-{
-	IRQ_CONNECT(DT_SILABS_SIM3_USART_USART_1_IRQ_RX,
-		    DT_SILABS_SIM3_USART_USART_1_IRQ_RX_PRIORITY,
-		    uart_sim3_isr, DEVICE_GET(usart_1), 0);
-	IRQ_CONNECT(DT_SILABS_SIM3_USART_USART_1_IRQ_TX,
-		    DT_SILABS_SIM3_USART_USART_1_IRQ_TX_PRIORITY,
-		    uart_sim3_isr, DEVICE_GET(usart_1), 0);
-
-	irq_enable(DT_SILABS_SIM3_USART_USART_1_IRQ_RX);
-	irq_enable(DT_SILABS_SIM3_USART_USART_1_IRQ_TX);
-}
-#endif
-
-#endif /* CONFIG_USART_SIM3_1 */

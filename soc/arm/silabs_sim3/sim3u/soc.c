@@ -53,7 +53,7 @@ static ALWAYS_INLINE void clock_init(void)
  *
  * @return 0
  */
-static int silabs_sim3u_init(struct device *arg)
+static int silabs_sim3u_init(const struct device *arg)
 {
 	ARG_UNUSED(arg);
 
@@ -126,7 +126,7 @@ SYS_INIT(silabs_sim3u_init, PRE_KERNEL_1, 0);
  * I/O pins will remain stable. The settings in PBOUTMD, PBMDSEL, or PBSKIPEN
  * will not take effect until the crossbars are enabled.
  */
-static int silabs_sim3u_crossbar_init(struct device *arg)
+static int silabs_sim3u_crossbar_init(const struct device *arg)
 {
 	ARG_UNUSED(arg);
 #ifdef CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0
