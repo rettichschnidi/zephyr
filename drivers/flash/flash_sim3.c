@@ -84,7 +84,7 @@ static int flash_sim3_write(const struct device *dev, const off_t offset,
 	const int key = irq_lock();
 
 	unlock_flash_multiple_op();
-	for (off_t write_offset = 0; write_offset < size;
+	for (size_t write_offset = 0; write_offset < size;
 	     write_offset += sizeof(uint16_t)) {
 		FLASHCTRL0->WRADDR = (uint32_t)(write_base + write_offset);
 		FLASHCTRL0->WRDATA =
@@ -129,7 +129,7 @@ static int flash_sim3_erase(const struct device *dev, off_t offset, size_t size)
 	FLASHCTRL0->CONFIG_b.ERASEEN = 1;
 	irq_key = irq_lock();
 	unlock_flash_multiple_op();
-	for (off_t erase_offset = 0; erase_offset < size;
+	for (size_t erase_offset = 0; erase_offset < size;
 	     erase_offset += FLASH_PAGE_SIZE) {
 		FLASHCTRL0->WRADDR =
 			CONFIG_FLASH_BASE_ADDRESS + offset + erase_offset;
@@ -149,7 +149,8 @@ static int flash_sim3_write_protection(const struct device *dev, bool enable)
 
 	k_mutex_lock(&dev_data->mutex, K_FOREVER);
 
-	/* The SiM3 requires a chain of commands (i.e. enabling erase before
+	/*
+	 * The SiM3 requires a chain of commands (i.e. enabling erase before
 	 * unlocking the flash.
 	 * Therefore, all we do here is to allow other function to ensure
 	 * whether the write protection has been willingly disabled upfront.
@@ -161,7 +162,8 @@ static int flash_sim3_write_protection(const struct device *dev, bool enable)
 	return 0;
 }
 
-/* Note:
+/*
+ * Note:
  * - A flash address to write to must be aligned to half-words.
  * - Number of bytes to write must be divisible by 2.
  */
@@ -214,9 +216,6 @@ static const struct flash_driver_api flash_sim3_driver_api = {
 	.write = flash_sim3_write,
 	.erase = flash_sim3_erase,
 	.write_protection = flash_sim3_write_protection,
-	/* FLASH_WRITE_BLOCK_SIZE is extracted from device tree as flash node
-	 * property 'write-block-size'.
-	 */
 	.get_parameters = flash_sim3_get_parameters,
 };
 
