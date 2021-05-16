@@ -45,28 +45,6 @@ gpio_sim3_add_pbstd_port(struct gpio_sim3_pbstd_common_data *data,
 	data->ports[data->count++] = dev;
 }
 
-static int gpio_sim3_pbstd_port_set_bits_raw(const struct device *port,
-					     uint32_t pins)
-{
-	const struct gpio_sim3_config *config = port->config;
-	PBSTD_Type *gpio_base = config->gpio_base;
-
-	gpio_base->PB_SET = pins;
-
-	return 0;
-}
-
-static int gpio_sim3_pbstd_port_clear_bits_raw(const struct device *port,
-					       uint32_t pins)
-{
-	const struct gpio_sim3_config *config = port->config;
-	PBSTD_Type *gpio_base = config->gpio_base;
-
-	gpio_base->PB_CLR = pins;
-
-	return 0;
-}
-
 static int gpio_sim3_pbstd_port_get_raw(const struct device *port,
 					uint32_t *value)
 {
@@ -85,6 +63,28 @@ static int gpio_sim3_pbstd_port_set_masked_raw(const struct device *port,
 	PBSTD_Type *gpio_base = config->gpio_base;
 
 	gpio_base->PB_MSK = (mask << 0xF) | value;
+
+	return 0;
+}
+
+static int gpio_sim3_pbstd_port_set_bits_raw(const struct device *port,
+					     uint32_t pins)
+{
+	const struct gpio_sim3_config *config = port->config;
+	PBSTD_Type *gpio_base = config->gpio_base;
+
+	gpio_base->PB_SET = pins;
+
+	return 0;
+}
+
+static int gpio_sim3_pbstd_port_clear_bits_raw(const struct device *port,
+					       uint32_t pins)
+{
+	const struct gpio_sim3_config *config = port->config;
+	PBSTD_Type *gpio_base = config->gpio_base;
+
+	gpio_base->PB_CLR = pins;
 
 	return 0;
 }
