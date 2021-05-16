@@ -212,19 +212,18 @@ static void uart_sim3_init_pins(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	uint8_t pin = 0;
 	/* Configure PB0.00 as digital output. */
-	PBSTD0->PB_CLR = BIT(pin); /* Set to 0. */
-	PBSTD0->PBOUTMD_SET = BIT(pin); /* push-pull */
+	const uint8_t pb0_0 = 0;
+	PBSTD0->PB_CLR = BIT(pb0_0); /* Set to 0. */
+	PBSTD0->PBOUTMD_SET = BIT(pb0_0); /* push-pull */
 
-	pin = 1;
-	PBSTD0->PBMDSEL_SET = BIT(pin); /* digital mode */
 	/* Configure PB0.01 as digital input */
-	PBSTD0->PBOUTMD_CLR = BIT(pin); /* Recommended for input mode. */
-	PBSTD0->PB_SET = BIT(pin); /* Recommended for input mode. */
-	PBSTD0->PBMDSEL_SET = BIT(pin); /* Set digital mode. */
+	const uint8_t pb0_1 = 1;
+	PBSTD0->PBMDSEL_SET = BIT(pb0_1); /* digital mode */
+	PBSTD0->PBOUTMD_CLR = BIT(pb0_1); /* open drain */
+	PBSTD0->PB_SET = BIT(pb0_1); /* as recommended for digital input mode */
 
-	/* Enable UART0EN in xbar0. */
+	/* Enable UART0EN in XBAR0. */
 	PBCFG0->XBAR0H_SET = PBCFG_XBAR0H_UART0EN_Msk;
 }
 

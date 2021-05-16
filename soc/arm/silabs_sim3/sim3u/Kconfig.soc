@@ -36,6 +36,7 @@ config SOC_SERIES_SIM3U_CROSSBAR_INIT_PRIORITY
 
 menuconfig SOC_SERIES_SIM3U_CROSSBAR_0
 	bool "Enable crossbar 0"
+	default y
 	help
 	  Enable crossbar for PB0 and PB1.
 
@@ -141,6 +142,7 @@ endif # SOC_SERIES_SIM3U_CROSSBAR_0
 
 menuconfig SOC_SERIES_SIM3U_CROSSBAR_1
 	bool "Enable crossbar 1"
+	default y
 	help
 	  Enable crossbar for PB2 and PB3.
 
