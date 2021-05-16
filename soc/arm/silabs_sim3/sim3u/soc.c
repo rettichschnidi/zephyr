@@ -347,4 +347,6 @@ static int silabs_sim3u_crossbar_init(const struct device *arg)
 	return 0;
 }
 
-SYS_INIT(silabs_sim3u_crossbar_init, POST_KERNEL, 0);
+BUILD_ASSERT(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_INIT_PRIORITY > KERNEL_INIT_PRIORITY_DEVICE,
+	     "Crossbar must not be enabled before port banks registers got configured");
+SYS_INIT(silabs_sim3u_crossbar_init, POST_KERNEL, CONFIG_SOC_SERIES_SIM3U_CROSSBAR_INIT_PRIORITY);

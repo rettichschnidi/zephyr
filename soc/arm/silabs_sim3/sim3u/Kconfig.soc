@@ -24,10 +24,20 @@ config SOC_SERIES_SIM3U_PREVENT_BRICKING
 		not possible to reprogram the on-chip flash. Adding a delay here gives
 		a debug agent sufficient time to connect.
 
-menuconfig SOC_SERIES_SIM3U_CROSSBAR_0
-	bool "Enable Crossbar 0"
+config SOC_SERIES_SIM3U_CROSSBAR_INIT_PRIORITY
+	int "Init priority for the crossbar"
+	default 51
+	depends on (SOC_SERIES_SIM3U_CROSSBAR_0 || SOC_SERIES_SIM3U_CROSSBAR_1)
 	help
-	  Enable crossbar 1
+		When enabling the crossbar, all settings should be made to the crossbar and port
+		bank registers before. This ensures that peripherals will not shift around while
+		each one is being enabled and port I/O pins will remain stable.
+		Therefore, this values should be higher than KERNEL_INIT_PRIORITY_DEVICE.
+
+menuconfig SOC_SERIES_SIM3U_CROSSBAR_0
+	bool "Enable crossbar 0"
+	help
+	  Enable crossbar 0
 
 if SOC_SERIES_SIM3U_CROSSBAR_0
 
@@ -130,7 +140,7 @@ config SOC_SERIES_SIM3U_CROSSBAR_0_PB1_15_SKIP
 endif # SOC_SERIES_SIM3U_CROSSBAR_0
 
 menuconfig SOC_SERIES_SIM3U_CROSSBAR_1
-	bool "Enable Crossbar 1"
+	bool "Enable crossbar 1"
 	help
 	  Enable crossbar 1
 
