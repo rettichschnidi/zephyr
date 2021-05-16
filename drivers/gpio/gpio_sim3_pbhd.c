@@ -38,8 +38,8 @@ static inline int gpio_sim3_pbhd_pin_configure(const struct device *port, gpio_p
 	gpio_base->PBDRV_b.PBLVMD = 1; /* VIOHD is > 3.6V */
 	gpio_base->PBDRV_b.PBDRVEN = PBHD4_PBDRV_PBDRVEN_Enable; /* enable driver */
 
-	gpio_base->PB_CLR = (1U << pin); /* Set to 0 */
-	gpio_base->PBMDSEL_SET = (1U << pin); /* digital mode */
+	gpio_base->PB_CLR = BIT(pin); /* Set to 0 */
+	gpio_base->PBMDSEL_SET = BIT(pin); /* digital mode */
 
 	/* Configure pin as GPIO (reset value) */
 	switch (pin) {
@@ -64,7 +64,7 @@ static inline int gpio_sim3_pbhd_pin_configure(const struct device *port, gpio_p
 	}
 
 	/* output driver enable */
-	gpio_base->PBDEN_SET = (1U << (pin + PBHD_PBDEN_PBNDEN_Pos));
+	gpio_base->PBDEN_SET = BIT((pin + PBHD_PBDEN_PBNDEN_Pos));
 
 	return 0;
 }
@@ -144,11 +144,5 @@ static const struct gpio_sim3_config gpio_sim3_port4_config = {
 	.gpio_base = (void *)DT_INST_REG_ADDR(4),
 };
 
-DEVICE_DT_INST_DEFINE(4,
-		      gpio_sim3_port4_init,
-		      device_pm_control_nop,
-		      NULL, &gpio_sim3_port4_config,
-		      POST_KERNEL,
-		      CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
-		      &gpio_sim3_pbhd_driver_api
-		      );
+DEVICE_DT_INST_DEFINE(4, gpio_sim3_port4_init, device_pm_control_nop, NULL, &gpio_sim3_port4_config,
+		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &gpio_sim3_pbhd_driver_api);
