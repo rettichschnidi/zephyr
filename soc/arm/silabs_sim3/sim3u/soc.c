@@ -35,14 +35,13 @@ static ALWAYS_INLINE void clock_init(void)
 	while (CLKCTRL0->CONTROL_b.OBUSYF) {
 	}
 
-#if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0) ||                             \
-	defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1)
+#if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0) || defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1)
 	/* Enable APB clock to the port bank modules. */
 	CLKCTRL0->APBCLKG0_b.PB0CEN = 1;
 #endif /* SOC_SERIES_SIM3U_CROSSBAR_0 */
 
-//	// The following line bricked my dev-board!
-//	CLKCTRL0->CONTROL_b.AHBSEL = CLKCTRL0_CONTROL_AHBSEL_100;
+	//	// The following line bricked my dev-board!
+	//	CLKCTRL0->CONTROL_b.AHBSEL = CLKCTRL0_CONTROL_AHBSEL_100;
 }
 
 /**
@@ -67,8 +66,7 @@ static int silabs_sim3u_init(const struct device *arg)
 	 * not possible to reprogram the on-chip flash. Adding a delay here
 	 * gives a debug agent sufficient time to connect.
 	 */
-	if ((RSTSRC0->RESETFLAG_b.PORRF == 0) &&
-	    (RSTSRC0->RESETFLAG_b.VMONRF == 0) &&
+	if ((RSTSRC0->RESETFLAG_b.PORRF == 0) && (RSTSRC0->RESETFLAG_b.VMONRF == 0) &&
 	    (RSTSRC0->RESETFLAG_b.PINRF == 1)) {
 		/*
 		 * Set the SysTick timer to count down 10M ticks @ 20MHz
@@ -76,8 +74,7 @@ static int silabs_sim3u_init(const struct device *arg)
 		 */
 		SysTick->LOAD = 0xA00000;
 		SysTick->VAL = 0;
-		SysTick->CTRL =
-			SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_ENABLE_Msk;
+		SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_ENABLE_Msk;
 
 		/* Wait for the count down to complete */
 		while (0 == (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk)) {
@@ -109,6 +106,7 @@ static int silabs_sim3u_init(const struct device *arg)
 
 	/* Restore interrupt state */
 	irq_unlock(oldLevel);
+
 	return 0;
 }
 
@@ -132,220 +130,221 @@ static int silabs_sim3u_crossbar_init(const struct device *arg)
 #ifdef CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0
 	const uint32_t crossbar_0_pb0 = 0
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_0_SKIP)
-				     | (1U << 0)
+					| BIT(0)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_1_SKIP)
-				     | (1U << 1)
+					| BIT(1)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_2_SKIP)
-				     | (1U << 2)
+					| BIT(2)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_3_SKIP)
-				     | (1U << 3)
+					| BIT(3)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_4_SKIP)
-				     | (1U << 4)
+					| BIT(4)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_5_SKIP)
-				     | (1U << 5)
+					| BIT(5)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_6_SKIP)
-				     | (1U << 6)
+					| BIT(6)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_7_SKIP)
-				     | (1U << 7)
+					| BIT(7)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_8_SKIP)
-				     | (1U << 8)
+					| BIT(8)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_9_SKIP)
-				     | (1U << 9)
+					| BIT(9)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_10_SKIP)
-				     | (1U << 10)
+					| BIT(10)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_11_SKIP)
-				     | (1U << 11)
+					| BIT(11)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_12_SKIP)
-				     | (1U << 12)
+					| BIT(12)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_13_SKIP)
-				     | (1U << 13)
+					| BIT(13)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_14_SKIP)
-				     | (1U << 14)
+					| BIT(14)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB0_15_SKIP)
-				     | (1U << 15)
+					| BIT(15)
 #endif
 		;
 	PBSTD0->PBSKIPEN = crossbar_0_pb0;
 
 	const uint32_t crossbar_0_pb1 = 0
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_0_SKIP)
-				     | (1U << 0)
+					| BIT(0)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_1_SKIP)
-				     | (1U << 1)
+					| BIT(1)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_2_SKIP)
-				     | (1U << 2)
+					| BIT(2)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_3_SKIP)
-				     | (1U << 3)
+					| BIT(3)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_4_SKIP)
-				     | (1U << 4)
+					| BIT(4)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_5_SKIP)
-				     | (1U << 5)
+					| BIT(5)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_6_SKIP)
-				     | (1U << 6)
+					| BIT(6)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_7_SKIP)
-				     | (1U << 7)
+					| BIT(7)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_8_SKIP)
-				     | (1U << 8)
+					| BIT(8)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_9_SKIP)
-				     | (1U << 9)
+					| BIT(9)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_10_SKIP)
-				     | (1U << 10)
+					| BIT(10)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_11_SKIP)
-				     | (1U << 11)
+					| BIT(11)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_12_SKIP)
-				     | (1U << 12)
+					| BIT(12)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_13_SKIP)
-				     | (1U << 13)
+					| BIT(13)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_14_SKIP)
-				     | (1U << 14)
+					| BIT(14)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0_PB1_15_SKIP)
-				     | (1U << 15)
+					| BIT(15)
 #endif
 		;
 	PBSTD1->PBSKIPEN = crossbar_0_pb1;
 
-	PBCFG0->XBAR0H_b.XBAR0EN = 1;
 #endif /* CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0 */
+
+	PBCFG0->XBAR0H_b.XBAR0EN = IS_ENABLED(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_0);
 
 #ifdef CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1
 	const uint32_t crossbar_1_pb2 = 0
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_0_SKIP)
-				     | (1U << 0)
+					| BIT(0)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_1_SKIP)
-				     | (1U << 1)
+					| BIT(1)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_2_SKIP)
-				     | (1U << 2)
+					| BIT(2)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_3_SKIP)
-				     | (1U << 3)
+					| BIT(3)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_4_SKIP)
-				     | (1U << 4)
+					| BIT(4)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_5_SKIP)
-				     | (1U << 5)
+					| BIT(5)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_6_SKIP)
-				     | (1U << 6)
+					| BIT(6)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_7_SKIP)
-				     | (1U << 7)
+					| BIT(7)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_8_SKIP)
-				     | (1U << 8)
+					| BIT(8)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_9_SKIP)
-				     | (1U << 9)
+					| BIT(9)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_10_SKIP)
-				     | (1U << 10)
+					| BIT(10)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_11_SKIP)
-				     | (1U << 11)
+					| BIT(11)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_12_SKIP)
-				     | (1U << 12)
+					| BIT(12)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_13_SKIP)
-				     | (1U << 13)
+					| BIT(13)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_14_SKIP)
-				     | (1U << 14)
+					| BIT(14)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB2_15_SKIP)
-				     | (1U << 15)
+					| BIT(15)
 #endif
 		;
 	PBSTD2->PBSKIPEN = crossbar_1_pb2;
 
 	const uint32_t crossbar_1_pb3 = 0
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_0_SKIP)
-				     | (1U << 0)
+					| BIT(0)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_1_SKIP)
-				     | (1U << 1)
+					| BIT(1)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_2_SKIP)
-				     | (1U << 2)
+					| BIT(2)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_3_SKIP)
-				     | (1U << 3)
+					| BIT(3)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_4_SKIP)
-				     | (1U << 4)
+					| BIT(4)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_5_SKIP)
-				     | (1U << 5)
+					| BIT(5)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_6_SKIP)
-				     | (1U << 6)
+					| BIT(6)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_7_SKIP)
-				     | (1U << 7)
+					| BIT(7)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_8_SKIP)
-				     | (1U << 8)
+					| BIT(8)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_9_SKIP)
-				     | (1U << 9)
+					| BIT(9)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_10_SKIP)
-				     | (1U << 10)
+					| BIT(10)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_11_SKIP)
-				     | (1U << 11)
+					| BIT(11)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_12_SKIP)
-				     | (1U << 12)
+					| BIT(12)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_13_SKIP)
-				     | (1U << 13)
+					| BIT(13)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_14_SKIP)
-				     | (1U << 14)
+					| BIT(14)
 #endif
 #if defined(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1_PB3_15_SKIP)
-				     | (1U << 15)
+					| BIT(15)
 #endif
 		;
 	PBSTD3->PBSKIPEN = crossbar_1_pb3;
-
-	PBCFG0->XBAR1_b.XBAR1EN = 1;
 #endif /* CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1 */
+
+	PBCFG0->XBAR1_b.XBAR1EN = IS_ENABLED(CONFIG_SOC_SERIES_SIM3U_CROSSBAR_1);
 
 	return 0;
 }
 
-SYS_INIT(silabs_sim3u_crossbar_init, PRE_KERNEL_2, 0);
+SYS_INIT(silabs_sim3u_crossbar_init, POST_KERNEL, 0);

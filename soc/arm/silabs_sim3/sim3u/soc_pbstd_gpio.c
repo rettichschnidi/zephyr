@@ -13,14 +13,14 @@ void soc_pbstd_gpio_configure(const struct soc_pbstd_gpio_pin *pin)
 {
 	switch (pin->mode) {
 	case SOC_PBSTD_GPIO_PIN_MODE_DIGITAL_PUSH_PULL_OUTPUT:
-		pin->port->PB_CLR = (1U << pin->pin);
-		pin->port->PBOUTMD_SET = (1U << pin->pin);
+		pin->port->PB_CLR = BIT(pin->pin);
+		pin->port->PBOUTMD_SET = BIT(pin->pin);
 		break;
 	case SOC_PBSTD_GPIO_PIN_MODE_DIGITAL_INPUT:
-		pin->port->PBOUTMD_CLR = (1U << pin->pin);
-		pin->port->PB_SET = (1U << pin->pin);
+		pin->port->PBOUTMD_CLR = BIT(pin->pin);
+		pin->port->PB_SET = BIT(pin->pin);
 		break;
 	}
 	/* For GPIOs, all modes are digital. */
-	pin->port->PBMDSEL_SET = (1U << pin->pin);
+	pin->port->PBMDSEL_SET = BIT(pin->pin);
 }

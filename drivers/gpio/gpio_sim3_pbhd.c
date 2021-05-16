@@ -149,6 +149,6 @@ DEVICE_DT_INST_DEFINE(4,
 		      device_pm_control_nop,
 		      NULL, &gpio_sim3_port4_config,
 		      POST_KERNEL,
-		      CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		      CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		      &gpio_sim3_pbhd_driver_api
-);
+		      );

@@ -253,7 +253,7 @@ static struct gpio_sim3_pbstd_data gpio_sim3_port0_data;
 
 DEVICE_DT_INST_DEFINE(0, gpio_sim3_port0_init, device_pm_control_nop,
 		      &gpio_sim3_port0_data, &gpio_sim3_port0_config,
-		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		      &gpio_sim3_pbstd_driver_api);
 
 static int gpio_sim3_port0_init(const struct device *dev)
@@ -274,7 +274,7 @@ static struct gpio_sim3_pbstd_data gpio_sim3_port1_data;
 
 DEVICE_DT_INST_DEFINE(1, gpio_sim3_port1_init, device_pm_control_nop,
 		      &gpio_sim3_port1_data, &gpio_sim3_port1_config,
-		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		      &gpio_sim3_pbstd_driver_api);
 
 static int gpio_sim3_port1_init(const struct device *dev)
@@ -295,7 +295,7 @@ static struct gpio_sim3_pbstd_data gpio_sim3_port2_data;
 
 DEVICE_DT_INST_DEFINE(2, gpio_sim3_port2_init, device_pm_control_nop,
 		      &gpio_sim3_port2_data, &gpio_sim3_port2_config,
-		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		      &gpio_sim3_pbstd_driver_api);
 
 static int gpio_sim3_port2_init(const struct device *dev)
@@ -316,7 +316,7 @@ static struct gpio_sim3_pbstd_data gpio_sim3_port3_data;
 
 DEVICE_DT_INST_DEFINE(3, gpio_sim3_port3_init, device_pm_control_nop,
 		      &gpio_sim3_port3_data, &gpio_sim3_port3_config,
-		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+		      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		      &gpio_sim3_pbstd_driver_api);
 
 static int gpio_sim3_port3_init(const struct device *dev)
