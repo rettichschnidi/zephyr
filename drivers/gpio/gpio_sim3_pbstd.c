@@ -235,6 +235,9 @@ static int gpio_sim3_pbstd_init(const struct device *dev)
 static int gpio_sim3_port0_init(const struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port0_config = {
+	.common = {
+		.port_pin_mask = SIM3U_CROSSBAR_0_PB0_SKIPPED_MASK,
+	},
 	.gpio_base = (void *)DT_INST_REG_ADDR(0),
 };
 
@@ -256,7 +259,7 @@ static int gpio_sim3_port1_init(const struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port1_config = {
 	.common = {
-		.port_pin_mask = 0xFFFF
+		.port_pin_mask = SIM3U_CROSSBAR_0_PB1_SKIPPED_MASK,
 	},
 	.gpio_base = (void *)DT_INST_REG_ADDR(1),
 };
@@ -278,6 +281,9 @@ static int gpio_sim3_port1_init(const struct device *dev)
 static int gpio_sim3_port2_init(const struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port2_config = {
+	.common = {
+		.port_pin_mask = SIM3U_CROSSBAR_1_PB2_SKIPPED_MASK,
+	},
 	.gpio_base = (void *)DT_INST_REG_ADDR(2),
 };
 
@@ -298,6 +304,9 @@ static int gpio_sim3_port2_init(const struct device *dev)
 static int gpio_sim3_port3_init(const struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port3_config = {
+	.common = {
+		.port_pin_mask = SIM3U_CROSSBAR_1_PB3_SKIPPED_MASK,
+	},
 	.gpio_base = (void *)DT_INST_REG_ADDR(3),
 };
 
