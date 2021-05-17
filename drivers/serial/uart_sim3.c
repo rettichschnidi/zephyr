@@ -208,25 +208,6 @@ static void uart_sim3_isr(struct device *dev)
 }
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */
 
-static void uart_sim3_init_pins(const struct device *dev)
-{
-	ARG_UNUSED(dev);
-
-	/* Configure PB0.00 as digital output. */
-	const uint8_t pb0_0 = 0;
-	PBSTD0->PB_CLR = BIT(pb0_0); /* Set to 0. */
-	PBSTD0->PBOUTMD_SET = BIT(pb0_0); /* push-pull */
-
-	/* Configure PB0.01 as digital input */
-	const uint8_t pb0_1 = 1;
-	PBSTD0->PBMDSEL_SET = BIT(pb0_1); /* digital mode */
-	PBSTD0->PBOUTMD_CLR = BIT(pb0_1); /* open drain */
-	PBSTD0->PB_SET = BIT(pb0_1); /* as recommended for digital input mode */
-
-	/* Enable UART0EN in XBAR0. */
-	PBCFG0->XBAR0H_SET = PBCFG_XBAR0H_UART0EN_Msk;
-}
-
 #define N (2)
 #define CALC_BAUDRATE(baudrate)                                                                    \
 	(uint32_t)((uint32_t)(SystemCoreClock / (N * (uint32_t)baudrate)) - 1)
@@ -240,21 +221,27 @@ static int uart_sim3_init(const struct device *dev)
 	const struct uart_sim3_config *config = dev->config;
 	const uint16_t baud = CALC_BAUDRATE(config->baud_rate);
 
-	/* The peripheral and gpio clocks are already enabled from soc and gpio
+	/*
+	 * The peripheral and gpio clocks are already enabled from soc and gpio
 	 * driver.
 	 */
 
 	/* Enable UART clock */
-	CLKCTRL0->APBCLKG0_b.UART1CEN = CLKCTRL0_APBCLKG0_UART1CEN_Enable;
-	CLKCTRL0->APBCLKG0_b.UART0CEN = CLKCTRL0_APBCLKG0_UART0CEN_Enable;
+	switch ((uintptr_t)config->base) {
+	case DT_INST_REG_ADDR(0):
+		CLKCTRL0->APBCLKG0_b.UART0CEN = CLKCTRL0_APBCLKG0_UART0CEN_Enable;
+		PBCFG0->XBAR0H_SET = PBCFG_XBAR0H_UART0EN_Msk;
+		break;
+	case DT_INST_REG_ADDR(1):
+		CLKCTRL0->APBCLKG0_b.UART1CEN = CLKCTRL0_APBCLKG0_UART1CEN_Enable;
+		PBCFG0->XBAR0H_SET = PBCFG_XBAR0H_UART1EN_Msk;
+		break;
+	}
 
 	config->base->BAUDRATE_b.TBAUD = baud;
 	config->base->BAUDRATE_b.RBAUD = baud;
 
 	/* 8n1 is reset value. */
-
-	/* Initialize UART pins */
-	uart_sim3_init_pins(dev);
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
 	config->irq_config_func(dev);

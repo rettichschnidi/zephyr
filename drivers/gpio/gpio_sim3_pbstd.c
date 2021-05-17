@@ -26,6 +26,9 @@ struct gpio_sim3_pbstd_common_data {
 };
 
 struct gpio_sim3_pbstd_data {
+	/* gpio_driver_data needs to be first */
+	struct gpio_driver_data common;
+
 	/* port ISR callback routine address */
 	sys_slist_t callbacks;
 	/* pin callback routine enable flags, by pin number */
@@ -224,6 +227,7 @@ static int gpio_sim3_pbstd_init(const struct device *dev)
 		    gpio_sim3_pbstd_isr, DEVICE_DT_GET(DT_INST(0, silabs_sim3_gpio)), 0);
 
 	irq_enable(PMATCH0_IRQn);
+
 	return 0;
 }
 
@@ -251,6 +255,9 @@ static int gpio_sim3_port0_init(const struct device *dev)
 static int gpio_sim3_port1_init(const struct device *dev);
 
 static const struct gpio_sim3_config gpio_sim3_port1_config = {
+	.common = {
+		.port_pin_mask = 0xFFFF
+	},
 	.gpio_base = (void *)DT_INST_REG_ADDR(1),
 };
 
