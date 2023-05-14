@@ -6,9 +6,9 @@ config SOC_VENDOR_SILABS
 	select HAS_SEGGER_RTT if ZEPHYR_SEGGER_MODULE
 	select BUILD_OUTPUT_HEX
 
-if SOC_VENDOR_SILABS
-
 rsource "*/*/Kconfig"
+
+if SOC_VENDOR_SILABS
 
 config SOC_GECKO_SDID
 	int
