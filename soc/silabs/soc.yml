@@ -1,4 +1,9 @@
 family:
+  - name: silabs_sim3
+    series:
+      - name: sim3u
+        socs:
+          - name: sim3u167bgm
   - name: silabs_s0
     series:
       - name: efm32wg
