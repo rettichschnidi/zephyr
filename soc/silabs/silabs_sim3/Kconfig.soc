@@ -2,4 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-source "soc/silabs/silabs_sim3/*/Kconfig.series"
+config SOC_FAMILY_SILABS_SIM3
+	bool
+
+rsource "*/Kconfig.soc"

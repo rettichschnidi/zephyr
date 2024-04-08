@@ -6,9 +6,9 @@ GARDENA SiM3U radio module
 Overview
 ********
 
-This is a SoM that is used as a radio module by the GARDENA smart Gateway.
+This is a SoM that is used as a radio module by the GARDENA smart gateway.
 
-.. figure:: gardena_rm_sim3u.jpg
+.. figure:: rm_sim3u.jpg
    :align: center
    :alt: GARDENA SiM3U radio module
 

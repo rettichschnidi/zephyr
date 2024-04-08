@@ -239,6 +239,10 @@ else()
   message(FATAL_ERROR "Invalid BOARD; see above.")
 endif()
 
+message(STATUS "HWM: ${HWM}")
+message(STATUS "HWMv1: ${HWMv1}")
+message(STATUS "HWMv2: ${HWMv2}")
+
 if(HWMv1 AND DEFINED BOARD_QUALIFIERS)
   message(FATAL_ERROR
           "Board '${BOARD}' does not support board qualifiers, ${BOARD}${BOARD_QUALIFIERS}.\n"

@@ -11,4 +11,4 @@ config HAS_SILABS_GECKO
 config HAS_SILABS_SI32
 	bool
 	select HAS_CMSIS_CORE
-	depends on SOC_FAMILY_SIM3
+	depends on SOC_FAMILY_SILABS_SIM3

@@ -3,10 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 config SOC_SERIES_SIM3U
-	bool "SiM3U Series MCU"
 	select ARM
 	select CPU_CORTEX_M3
-	select SOC_FAMILY_SIM3
+	select SOC_FAMILY_SILABS_SIM3
 	select CLOCK_CONTROL
 	select CPU_CORTEX_M_HAS_SYSTICK
 	select HAS_SILABS_SI32

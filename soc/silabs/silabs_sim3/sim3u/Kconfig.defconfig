@@ -6,12 +6,6 @@
 
 if SOC_SERIES_SIM3U
 
-config SOC_SERIES
-	default "sim3u"
-
-config SOC_PART_NUMBER
-	default "SIM3U167-B-GM" if SOC_PART_NUMBER_SIM3U167_B_GM
-
 config SYS_CLOCK_HW_CYCLES_PER_SEC
 	default $(dt_node_int_prop_int,/cpus/cpu@0,clock-frequency)
 

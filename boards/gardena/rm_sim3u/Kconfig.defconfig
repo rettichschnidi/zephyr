@@ -2,9 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-if BOARD_GARDENA_RM_SIM3U
+if BOARD_RM_SIM3U
 
 config BOARD
-	default "gardena_rm_sim3u"
+	default "rm_sim3u"
 
-endif # BOARD_GARDENA_RM_SIM3U
+endif # BOARD_RM_SIM3U

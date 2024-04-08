@@ -12,3 +12,5 @@ add_custom_command(
                                ${EDT_PICKLE} ${CROSSBAR_CONFIG_H})
 add_custom_target(silabs_crossbar_config_h DEPENDS ${CROSSBAR_CONFIG_H})
 add_dependencies(zephyr_interface silabs_crossbar_config_h)
+
+set(SOC_LINKER_SCRIPT ${ZEPHYR_BASE}/include/zephyr/arch/arm/cortex_m/scripts/linker.ld CACHE INTERNAL "")

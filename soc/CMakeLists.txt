@@ -12,6 +12,7 @@ unset(_SOC_IS_IN_TREE)
 add_subdirectory(common)
 
 if(HWMv1)
+  message(FATAL_ERROR "HWMv1!")
   if(EXISTS ${SOC_DIR}/${ARCH}/CMakeLists.txt)
     add_subdirectory(${SOC_DIR}/${ARCH} soc/${ARCH})
   else()

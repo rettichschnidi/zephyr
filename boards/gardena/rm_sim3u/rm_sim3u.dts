@@ -6,7 +6,7 @@
 
 /dts-v1/;
 #include <silabs/sim3u167bgm.dtsi>
-#include "gardena_rm_sim3u-pinctrl.dtsi"
+#include "rm_sim3u-pinctrl.dtsi"
 
 / {
 	model = "GARDENA SiM3U radio module";
