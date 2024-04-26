@@ -135,6 +135,18 @@
 			reg = <0x4002a3c0 0xa0>;
 		};
 
+		dma: dma@40036000 {
+			compatible = "silabs,si32-dma";
+			reg = <0x40036000 0x1000>;
+			interrupts = <4 11>, <5 12>, <6 13>, <7 14>,
+			             <8 15>, <9 16>, <10 17>, <11 18>,
+			             <12 19>, <13 20>, <14 21>, <15 22>,
+			             <16 23>, <17 24>, <18 25>, <19 26>;
+			dma-channels = <16>;
+			#dma-cells = <3>;
+			status = "disabled";
+		};
+
 		crypto: crypto@40027000 {
 			compatible = "silabs,si32-aes";
 			reg = <0x40027000 0x1000>;
