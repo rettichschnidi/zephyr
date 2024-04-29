@@ -166,6 +166,7 @@ static int dma_si32_config(const struct device *dev, uint32_t channel, struct dm
 		dam_si32_data.channels[channel].TMD = SI32_DMADESC_A_CONFIG_TMD_AUTO_REQUEST_VALUE;
 		break;
 	default: /* everything else is not (yet) supported */
+		LOG_ERR("Channel direction not implemented: %d", cfg->channel_direction);
 		return -ENOTSUP;
 	}
 
