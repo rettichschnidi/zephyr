@@ -13,3 +13,9 @@ properties:
 
   interrupts:
     required: true
+
+  dmas:
+    required: true
+
+  dma-names:
+    required: true
