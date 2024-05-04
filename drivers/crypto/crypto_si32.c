@@ -59,7 +59,10 @@ static const struct crypto_si32_config crypto_si32_config = {
 static void crypto_si32_dma_completed(const struct device *dev, void *user_data, uint32_t channel,
 				      int status)
 {
-	const char *const result = status == DMA_STATUS_COMPLETE ? "finished" : "failed";
+	ARG_UNUSED(dev);
+	ARG_UNUSED(user_data);
+
+	const char *const result = status == DMA_STATUS_COMPLETE ? "succeeded" : "failed";
 
 	switch (channel) {
 	case DMA_CHANNEL_ID_RX:
@@ -169,9 +172,6 @@ static void assert_dma_settings_channel_tx(struct SI32_DMADESC_A_Struct *channel
 		 "RPOWER = 2 (4 data transfers per transaction).");
 	__ASSERT(channel_descriptor->DSTEND.U32 == (uintptr_t)&crypto_si32_config.base->DATAFIFO,
 		 "Destination end pointer set to the DATAFIFO register.");
-	__ASSERT(channel_descriptor->SRCEND.U32 == (uintptr_t)pkt->in_buf + pkt->in_len - 4,
-		 "Source end pointer set to the plain or cipher text input buffer address "
-		 "location + 16 x N – 4, where N is the number of blocks.");
 	__ASSERT(channel_descriptor->CONFIG.DSTAIMD == 0b11,
 		 "The DSTAIMD field should be set to 011b for no increment.");
 	__ASSERT(channel_descriptor->CONFIG.SRCAIMD == 0b10,
@@ -183,9 +183,6 @@ static void assert_dma_settings_channel_rx(struct SI32_DMADESC_A_Struct *channel
 {
 	assert_dma_settings_common(channel_descriptor);
 
-	__ASSERT(channel_descriptor->DSTEND.U32 == (uintptr_t)pkt->out_buf + pkt->in_len - 4,
-		 "Destination end pointer set to the plain or cipher text output buffer address "
-		 "location + 16 x N – 4, where N is the number of blocks.");
 	__ASSERT(channel_descriptor->SRCEND.U32 == (uintptr_t)&crypto_si32_config.base->DATAFIFO,
 		 "Source end pointer set to the DATAFIFO register.");
 	__ASSERT(channel_descriptor->CONFIG.DSTAIMD == 0b10,
@@ -194,10 +191,9 @@ static void assert_dma_settings_channel_rx(struct SI32_DMADESC_A_Struct *channel
 		 "The SRCAIMD field should be set to 011b for no increment.");
 }
 
-static int crypto_si32_dma_setup(struct cipher_ctx *ctx, struct cipher_pkt *pkt)
+static int crypto_si32_dma_setup(struct cipher_pkt *pkt, uint_fast8_t in_buf_offset,
+				 uint_fast8_t out_buf_offset)
 {
-	ARG_UNUSED(ctx);
-
 	struct dma_block_config dma_block_tx = {0};
 	struct dma_block_config dma_block_rx = {0};
 	const struct device *dma = DEVICE_DT_GET(DT_NODELABEL(dma));
@@ -213,17 +209,17 @@ static int crypto_si32_dma_setup(struct cipher_ctx *ctx, struct cipher_pkt *pkt)
 		return -EINVAL;
 	}
 
-	if (pkt->out_buf_max < pkt->in_len) {
+	if (pkt->out_buf_max - out_buf_offset < pkt->in_len - in_buf_offset) {
 		LOG_ERR("Output buf too small");
 		return -EINVAL;
 	}
 
 	/* Set up input (TX) DMA channel */
-	dma_block_tx.block_size = pkt->in_len;
-	dma_block_tx.source_address = (uintptr_t)pkt->in_buf;
+	dma_block_tx.block_size = pkt->in_len - in_buf_offset;
+	dma_block_tx.source_address = (uintptr_t)pkt->in_buf + in_buf_offset;
 	dma_block_tx.source_addr_adj = 0b00; /* increment */
 	dma_block_tx.dest_address = (uintptr_t)&crypto_si32_config.base->DATAFIFO;
-	dma_block_tx.dest_addr_adj = 0b10; /* no change */
+	dma_block_tx.dest_addr_adj = 0b10; /* no change (no increment) */
 
 	struct dma_config dma_config_tx = {
 		.channel_direction = MEMORY_TO_PERIPHERAL,
@@ -243,11 +239,11 @@ static int crypto_si32_dma_setup(struct cipher_ctx *ctx, struct cipher_pkt *pkt)
 	}
 
 	/* Set up output (RX) DMA channel */
-	dma_block_rx.block_size = pkt->in_len;
+	dma_block_rx.block_size = pkt->in_len - in_buf_offset;
 	dma_block_rx.source_address = (uintptr_t)&crypto_si32_config.base->DATAFIFO;
 	dma_block_rx.source_addr_adj = 0b10; /* no change */
-	dma_block_rx.dest_address = (uintptr_t)pkt->out_buf;
-	dma_block_rx.dest_addr_adj = 0b00; /* increment */
+	dma_block_rx.dest_address = (uintptr_t)pkt->out_buf + out_buf_offset;
+	dma_block_rx.dest_addr_adj = 0b00; /* increment (no increment) */
 
 	struct dma_config dma_config_rx = {
 		.channel_direction = PERIPHERAL_TO_MEMORY,
@@ -344,13 +340,15 @@ static int crypto_si32_aes_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt,
 			      const enum cipher_op op, const enum cipher_mode cm, const uint8_t *iv)
 {
 	int ret;
+	uint_fast8_t in_buf_offset = 0;
+	uint_fast8_t out_buf_offset = 0;
 
 	if (!ctx) {
 		LOG_WRN("Missing context");
 		return -EINVAL;
 	}
 
-	if (!ctx) {
+	if (!pkt) {
 		LOG_WRN("Missing packet");
 		return -EINVAL;
 	}
@@ -360,7 +358,17 @@ static int crypto_si32_aes_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt,
 		return -ENOSYS;
 	}
 
-	ret = crypto_si32_dma_setup(ctx, pkt);
+	/* Prefix IV to/remove from ciphertext unless CAP_NO_IV_PREFIX is set. */
+	if ((cm == CRYPTO_CIPHER_MODE_CBC) && (ctx->flags & CAP_NO_IV_PREFIX) == 0U) {
+		if (op == CRYPTO_CIPHER_OP_ENCRYPT) {
+			memcpy(pkt->out_buf, iv, 16);
+			out_buf_offset = 16;
+		} else {
+			in_buf_offset = 16;
+		}
+	}
+
+	ret = crypto_si32_dma_setup(pkt, in_buf_offset, out_buf_offset);
 	if (ret) {
 		return ret;
 	}
@@ -377,14 +385,17 @@ static int crypto_si32_aes_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt,
 	}
 
 	/* 1. The XFRSIZE register should be set to N-1, where N is the number of 4-word blocks. */
-	SI32_AES_A_write_xfrsize(crypto_si32_config.base, pkt->in_len / AES_BLOCK_SIZE - 1);
+	SI32_AES_A_write_xfrsize(crypto_si32_config.base,
+				 (pkt->in_len - in_buf_offset) / AES_BLOCK_SIZE - 1);
 
 	/* 3. The CONTROL register should be set as follows: */
 	{
 		__ASSERT(crypto_si32_config.base->CONTROL.ERRIEN == 1, "a. ERRIEN set to 1.");
-		/* b. KEYSIZE set to the appropriate number of bits for the key. */
+
+		/* KEYSIZE set to the appropriate number of bits for the key. */
 		SI32_AES_A_select_key_size_128(crypto_si32_config.base);
-		/* c. EDMD set to 1 for encryption, 0 for decryption */
+
+		/* EDMD set to 1 for encryption, 0 for decryption */
 		switch (op) {
 		case CRYPTO_CIPHER_OP_ENCRYPT:
 			SI32_AES_A_select_encryption_mode(crypto_si32_config.base);
@@ -393,26 +404,52 @@ static int crypto_si32_aes_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt,
 			SI32_AES_A_select_decryption_mode(crypto_si32_config.base);
 			break;
 		}
-		/* d. KEYCPEN set to 1 to enable key capture at the end of the transaction. */
-		SI32_AES_A_enable_key_capture(crypto_si32_config.base);
 
-		if (cm == CRYPTO_CIPHER_MODE_ECB) {
+		/* KEYCPEN set to 1 to enable key capture at the end of the transaction. */
+		if (cm == CRYPTO_CIPHER_MODE_CBC && op == CRYPTO_CIPHER_OP_DECRYPT) {
+			SI32_AES_A_disable_key_capture(crypto_si32_config.base);
+		} else {
+			SI32_AES_A_enable_key_capture(crypto_si32_config.base);
+		}
+
+		switch (cm) {
+		case CRYPTO_CIPHER_MODE_ECB:
 			/* ECB: e. The HCBCEN, HCTREN, XOREN, BEN, SWMDEN bits should all be cleared
-			 * to 0. */
+			 * to 0. Configuring HCBCEN and XOREN here, the rest after the switch.
+			 */
 			SI32_AES_A_select_xor_path_none(crypto_si32_config.base);
 			SI32_AES_A_exit_cipher_block_chaining_mode(crypto_si32_config.base);
-		} else {
+			break;
+		case CRYPTO_CIPHER_MODE_CBC:
 			__ASSERT(cm == CRYPTO_CIPHER_MODE_CBC, "Must be CBC");
-			/* c. XOREN bits set to 01b to enable the XOR input path. */
-			SI32_AES_A_select_xor_path_output(crypto_si32_config.base);
+
+			switch (op) {
+			case CRYPTO_CIPHER_OP_ENCRYPT:
+				/* c. XOREN bits set to 01b to enable the XOR input path. */
+				SI32_AES_A_select_xor_path_input(crypto_si32_config.base);
+				break;
+			case CRYPTO_CIPHER_OP_DECRYPT:
+				/* c. XOREN set to 10b to enable the XOR output path. */
+				SI32_AES_A_select_xor_path_output(crypto_si32_config.base);
+				break;
+			}
+
 			/* f. HCBCEN set to 1 to enable Hardware Cipher Block Chaining mode. */
 			SI32_AES_A_enter_cipher_block_chaining_mode(crypto_si32_config.base);
+
 			/* Initialization vector should be initialized to the HWCTRx registers */
 			crypto_si32_config.base->HWCTR0.U32 = *((uint32_t *)iv);
 			crypto_si32_config.base->HWCTR1.U32 = *((uint32_t *)iv + 1);
 			crypto_si32_config.base->HWCTR2.U32 = *((uint32_t *)iv + 2);
 			crypto_si32_config.base->HWCTR3.U32 = *((uint32_t *)iv + 3);
+			break;
+		case CRYPTO_CIPHER_MODE_CTR:
+		case CRYPTO_CIPHER_MODE_CCM:
+		case CRYPTO_CIPHER_MODE_GCM:
+			__ASSERT(false, "Not implemented");
+			return -ENOSYS;
 		}
+
 		/* CBC and ECB: g. The HCTREN, BEN, SWMDEN bits should all be cleared to 0. */
 		SI32_AES_A_exit_counter_mode(crypto_si32_config.base);
 		SI32_AES_A_exit_bypass_hardware_mode(crypto_si32_config.base);
@@ -424,14 +461,13 @@ static int crypto_si32_aes_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt,
 	/* Once the DMA and AES settings have been set, the transfer should be started by writing 1
 	 * to the XFRSTA bit.
 	 */
-	SI32_AES_A_clear_operation_complete_interrupt(crypto_si32_config.base);
 	SI32_AES_A_start_operation(crypto_si32_config.base);
 
-	if (k_sem_take(&work_done, Z_TIMEOUT_MS(10))) {
+	if (k_sem_take(&work_done, Z_TIMEOUT_MS(50))) {
 		return -EIO;
 	}
 
-	pkt->out_len = pkt->in_len;
+	pkt->out_len = pkt->in_len - in_buf_offset + out_buf_offset;
 
 	return 0;
 }
