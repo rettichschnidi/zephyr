@@ -9,6 +9,8 @@
  * Notes:
  *  - If not noted otherwise, chaper numbers refer to the SiM3U1XX/SiM3C1XX reference manual
  *    (SiM3U1xx-SiM3C1xx-RM.pdf, revision 1.0)
+ *  - Session handling not implemented. Would be needed to support encryption of CTR messages
+ *    splitted over multiple calls.
  */
 
 #define DT_DRV_COMPAT silabs_si32_aes
@@ -45,8 +47,8 @@ BUILD_ASSERT(DMA_CHANNEL_ID_RX < DMA_CHANNEL_COUNT, "Too few DMA channels");
 BUILD_ASSERT(DMA_CHANNEL_ID_TX < DMA_CHANNEL_COUNT, "Too few DMA channels");
 BUILD_ASSERT(DMA_CHANNEL_ID_XOR < DMA_CHANNEL_COUNT, "Too few DMA channels");
 
-K_MUTEX_DEFINE(in_use);
-K_SEM_DEFINE(work_done, 0, 1);
+K_MUTEX_DEFINE(crypto_si32_in_use);
+K_SEM_DEFINE(crypto_si32_work_done, 0, 1);
 
 static void crypto_si32_dma_completed(const struct device *dev, void *user_data, uint32_t channel,
 				      int status)
@@ -59,7 +61,7 @@ static void crypto_si32_dma_completed(const struct device *dev, void *user_data,
 	switch (channel) {
 	case DMA_CHANNEL_ID_RX:
 		LOG_DBG("AES0 RX DMA channel %s", result);
-		k_sem_give(&work_done);
+		k_sem_give(&crypto_si32_work_done);
 		break;
 	case DMA_CHANNEL_ID_TX:
 		LOG_DBG("AES0 TX DMA channel %s", result);
@@ -584,14 +586,14 @@ static int crypto_si32_aes_ecb_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		SI32_AES_A_select_dma_mode(SI32_AES_0);                 /* Clear SWMDEN*/
 	}
 
-	k_sem_reset(&work_done);
+	k_sem_reset(&crypto_si32_work_done);
 
 	/* Once the DMA and AES settings have been set, the transfer should be started by writing 1
 	 * to the XFRSTA bit.
 	 */
 	SI32_AES_A_start_operation(SI32_AES_0);
 
-	ret = k_sem_take(&work_done, Z_TIMEOUT_MS(50)); /* TODO: Verify 50 ms */
+	ret = k_sem_take(&crypto_si32_work_done, Z_TIMEOUT_MS(50)); /* TODO: Verify 50 ms */
 	if (ret) {
 		LOG_ERR("AES operation timed out: %d", ret);
 		return -EIO;
@@ -728,14 +730,14 @@ static int crypto_si32_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		SI32_AES_A_select_dma_mode(SI32_AES_0);           /* Clear SWMDEN*/
 	}
 
-	k_sem_reset(&work_done);
+	k_sem_reset(&crypto_si32_work_done);
 
 	/* Once the DMA and AES settings have been set, the transfer should be started by writing 1
 	 * to the XFRSTA bit.
 	 */
 	SI32_AES_A_start_operation(SI32_AES_0);
 
-	ret = k_sem_take(&work_done, Z_TIMEOUT_MS(50)); /* TODO: Verify 50 ms */
+	ret = k_sem_take(&crypto_si32_work_done, Z_TIMEOUT_MS(50)); /* TODO: Verify 50 ms */
 	if (ret) {
 		LOG_ERR("AES operation timed out: %d", ret);
 		return -EIO;
@@ -765,7 +767,7 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		return -ENOSYS;
 	}
 
-	k_mutex_lock(&in_use, K_FOREVER);
+	k_mutex_lock(&crypto_si32_in_use, K_FOREVER);
 
 	/* 12.8.1./12.8.2. Configuring the DMA for CTR Encryption/Decryption */
 
@@ -786,7 +788,7 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 	/* The initialization vector should be initialized to the HWCTRx registers. */
 	switch (ctx->mode_params.ctr_info.ctr_len) {
 	case 32:
-		SI32_AES_0->HWCTR3.U32 = 0;
+		SI32_AES_0->HWCTR3.U32 = 0; /* TODO: Implement caching within session. */
 		SI32_AES_0->HWCTR2.U32 = *((uint32_t *)iv + 2);
 		SI32_AES_0->HWCTR1.U32 = *((uint32_t *)iv + 1);
 		SI32_AES_0->HWCTR0.U32 = *((uint32_t *)iv);
@@ -837,14 +839,14 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		SI32_AES_A_select_dma_mode(SI32_AES_0);                 /* Clear SWMDEN*/
 	}
 
-	k_sem_reset(&work_done);
+	k_sem_reset(&crypto_si32_work_done);
 
 	/* Once the DMA and AES settings have been set, the transfer should be started by writing 1
 	 * to the XFRSTA bit.
 	 */
 	SI32_AES_A_start_operation(SI32_AES_0);
 
-	ret = k_sem_take(&work_done, Z_TIMEOUT_MS(50)); /* TODO: Verify 50 ms */
+	ret = k_sem_take(&crypto_si32_work_done, Z_TIMEOUT_MS(50)); /* TODO: Verify 50 ms */
 	if (ret) {
 		LOG_ERR("AES operation timed out: %d", ret);
 		ret = -EIO;
@@ -854,7 +856,7 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 	pkt->out_len = pkt->in_len;
 
 out_unlock:
-	k_mutex_unlock(&in_use);
+	k_mutex_unlock(&crypto_si32_in_use);
 
 	return ret;
 }
@@ -863,9 +865,9 @@ static int crypto_si32_aes_ecb_encrypt(struct cipher_ctx *ctx, struct cipher_pkt
 {
 	int ret;
 
-	k_mutex_lock(&in_use, K_FOREVER);
+	k_mutex_lock(&crypto_si32_in_use, K_FOREVER);
 	ret = crypto_si32_aes_ecb_op(ctx, pkt, CRYPTO_CIPHER_OP_ENCRYPT);
-	k_mutex_unlock(&in_use);
+	k_mutex_unlock(&crypto_si32_in_use);
 
 	return ret;
 }
@@ -874,9 +876,9 @@ static int crypto_si32_aes_ecb_decrypt(struct cipher_ctx *ctx, struct cipher_pkt
 {
 	int ret;
 
-	k_mutex_lock(&in_use, K_FOREVER);
+	k_mutex_lock(&crypto_si32_in_use, K_FOREVER);
 	ret = crypto_si32_aes_ecb_op(ctx, pkt, CRYPTO_CIPHER_OP_DECRYPT);
-	k_mutex_unlock(&in_use);
+	k_mutex_unlock(&crypto_si32_in_use);
 
 	return ret;
 }
@@ -885,9 +887,9 @@ static int crypto_si32_aes_cbc_encrypt(struct cipher_ctx *ctx, struct cipher_pkt
 {
 	int ret;
 
-	k_mutex_lock(&in_use, K_FOREVER);
+	k_mutex_lock(&crypto_si32_in_use, K_FOREVER);
 	ret = crypto_si32_aes_cbc_op(ctx, pkt, CRYPTO_CIPHER_OP_ENCRYPT, iv);
-	k_mutex_unlock(&in_use);
+	k_mutex_unlock(&crypto_si32_in_use);
 
 	return ret;
 }
@@ -896,9 +898,9 @@ static int crypto_si32_aes_cbc_decrypt(struct cipher_ctx *ctx, struct cipher_pkt
 {
 	int ret;
 
-	k_mutex_lock(&in_use, K_FOREVER);
+	k_mutex_lock(&crypto_si32_in_use, K_FOREVER);
 	ret = crypto_si32_aes_cbc_op(ctx, pkt, CRYPTO_CIPHER_OP_DECRYPT, iv);
-	k_mutex_unlock(&in_use);
+	k_mutex_unlock(&crypto_si32_in_use);
 
 	return ret;
 }
