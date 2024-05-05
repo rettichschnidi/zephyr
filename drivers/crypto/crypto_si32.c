@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Design decisions:
- *  - XXX
+ *  - As there is only one AES controller, this implementation is not using a device configuration.
+ *
  * Notes:
  *  - If not noted otherwise, chaper numbers refer to the SiM3U1XX/SiM3C1XX reference manual
  *    (SiM3U1xx-SiM3C1xx-RM.pdf, revision 1.0)
@@ -44,17 +45,8 @@ BUILD_ASSERT(DMA_CHANNEL_ID_RX < DMA_CHANNEL_COUNT, "Too few DMA channels");
 BUILD_ASSERT(DMA_CHANNEL_ID_TX < DMA_CHANNEL_COUNT, "Too few DMA channels");
 BUILD_ASSERT(DMA_CHANNEL_ID_XOR < DMA_CHANNEL_COUNT, "Too few DMA channels");
 
-struct crypto_si32_config {
-	SI32_AES_A_Type *base;
-	unsigned int irq;
-};
-
-atomic_t session_in_use;
+K_MUTEX_DEFINE(in_use);
 K_SEM_DEFINE(work_done, 0, 1);
-
-static const struct crypto_si32_config crypto_si32_config = {
-	.base = SI32_AES_0,
-};
 
 static void crypto_si32_dma_completed(const struct device *dev, void *user_data, uint32_t channel,
 				      int status)
@@ -95,10 +87,9 @@ static void crypto_si32_irq_error_handler(const struct device *dev)
 	 * FIFO overrun (DORF = 1) or underrun (DURF = 1) error occurs, or when an XOR data FIFO
 	 * overrun (XORF = 1) occurs.
 	 */
-	if (crypto_si32_config.base->STATUS.ERRI) {
+	if (SI32_AES_0->STATUS.ERRI) {
 		LOG_ERR("ISR: FIFO overrun (%u), underrun (%u), XOR FIF0 overrun (%u)",
-			crypto_si32_config.base->STATUS.DORF, crypto_si32_config.base->STATUS.DURF,
-			crypto_si32_config.base->STATUS.XORF);
+			SI32_AES_0->STATUS.DORF, SI32_AES_0->STATUS.DURF, SI32_AES_0->STATUS.XORF);
 		SI32_AES_A_clear_error_interrupt(SI32_AES_0);
 	}
 }
@@ -106,10 +97,7 @@ static void crypto_si32_irq_error_handler(const struct device *dev)
 /* For simplicity, the AES HW does not get turned of when not in use. */
 static int crypto_si32_init(const struct device *dev)
 {
-	const struct crypto_si32_config *config = dev->config;
-
-	__ASSERT(config->base == SI32_AES_0, "There is only one instance");
-	(void)config;
+	ARG_UNUSED(dev);
 
 	/* Enable clock for AES HW */
 	SI32_CLKCTRL_A_enable_apb_to_modules_0(SI32_CLKCTRL_0, SI32_CLKCTRL_A_APBCLKG0_AES0);
@@ -117,20 +105,20 @@ static int crypto_si32_init(const struct device *dev)
 	/* To use the AES0 module, firmware must first clear the RESET bit before initializing the
 	 * registers.
 	 */
-	SI32_AES_A_reset_module(crypto_si32_config.base);
+	SI32_AES_A_reset_module(SI32_AES_0);
 
-	__ASSERT(crypto_si32_config.base->CONTROL.RESET == 0, "Reset done");
+	__ASSERT(SI32_AES_0->CONTROL.RESET == 0, "Reset done");
 
 	/* 12.3. Interrupts: The completion interrupt should only be used in conjunction
 	 * with software mode (SWMDEN bit is set to 1) and not with DMA operations, where the DMA
 	 * completion interrupt should be used.
 	 */
-	SI32_AES_A_disable_operation_complete_interrupt(crypto_si32_config.base); /* default */
+	SI32_AES_A_disable_operation_complete_interrupt(SI32_AES_0); /* default */
 
 	/* 12.3. Interrupts: The error interrupt should always be enabled (ERRIEN = 1), even when
 	 * using the DMA with the AES module.
 	 */
-	SI32_AES_A_enable_error_interrupt(crypto_si32_config.base);
+	SI32_AES_A_enable_error_interrupt(SI32_AES_0);
 
 	/* Install error handler */
 	IRQ_CONNECT(DT_INST_IRQN(0), DT_INST_IRQ(0, priority), crypto_si32_irq_error_handler,
@@ -138,7 +126,7 @@ static int crypto_si32_init(const struct device *dev)
 	irq_enable(DT_INST_IRQN(0));
 
 	/* Halt AES0 module on debug breakpoint */
-	SI32_AES_A_enable_stall_in_debug_mode(crypto_si32_config.base);
+	SI32_AES_A_enable_stall_in_debug_mode(SI32_AES_0);
 
 	/* For peripheral transfers, firmware should configure the peripheral for the DMA transfer
 	 * and set the device’s DMA crossbar (DMAXBAR) to map a DMA channel to the peripheral.
@@ -146,24 +134,6 @@ static int crypto_si32_init(const struct device *dev)
 	SI32_DMAXBAR_A_select_channel_peripheral(SI32_DMAXBAR_0, SI32_DMAXBAR_CHAN5_AES0_TX);
 	SI32_DMAXBAR_A_select_channel_peripheral(SI32_DMAXBAR_0, SI32_DMAXBAR_CHAN6_AES0_RX);
 	SI32_DMAXBAR_A_select_channel_peripheral(SI32_DMAXBAR_0, SI32_DMAXBAR_CHAN7_AES0_XOR);
-
-	return 0;
-}
-
-static int crypto_si32_aes_set_iv(const uint8_t *iv, const uint8_t iv_len)
-{
-	switch (iv_len) {
-	case 16:
-		SI32_AES_0->HWCTR3.U32 = *((uint32_t *)iv + 3);
-	case 12:
-		SI32_AES_0->HWCTR2.U32 = *((uint32_t *)iv + 2);
-		SI32_AES_0->HWCTR1.U32 = *((uint32_t *)iv + 1);
-		SI32_AES_0->HWCTR0.U32 = *((uint32_t *)iv);
-		break;
-	default:
-		LOG_ERR("Invalid iv len: %" PRIu16, iv_len);
-		return -EINVAL;
-	}
 
 	return 0;
 }
@@ -252,6 +222,10 @@ static int crypto_si32_aes_set_keysize(const struct cipher_ctx *ctx)
 
 static void assert_dma_settings_common(struct SI32_DMADESC_A_Struct *channel_descriptor)
 {
+	if (!IS_ENABLED(CONFIG_ASSERT)) {
+		ARG_UNUSED(channel_descriptor);
+	}
+
 	__ASSERT(channel_descriptor->CONFIG.SRCSIZE == 2,
 		 "Source size (SRCSIZE) and destination size (DSTSIZE) are 2 for a word transfer.");
 	__ASSERT(channel_descriptor->CONFIG.DSTSIZE == 2,
@@ -263,9 +237,13 @@ static void assert_dma_settings_common(struct SI32_DMADESC_A_Struct *channel_des
 static void assert_dma_settings_channel_rx(struct SI32_DMADESC_A_Struct *channel_descriptor,
 					   struct cipher_pkt *pkt)
 {
+	if (!IS_ENABLED(CONFIG_ASSERT)) {
+		ARG_UNUSED(channel_descriptor);
+	}
+
 	assert_dma_settings_common(channel_descriptor);
 
-	__ASSERT(channel_descriptor->SRCEND.U32 == (uintptr_t)&crypto_si32_config.base->DATAFIFO,
+	__ASSERT(channel_descriptor->SRCEND.U32 == (uintptr_t)&SI32_AES_0->DATAFIFO,
 		 "Source end pointer set to the DATAFIFO register.");
 	__ASSERT(channel_descriptor->CONFIG.DSTAIMD == 0b10,
 		 "The DSTAIMD field should be set to 010b for word increments.");
@@ -273,12 +251,15 @@ static void assert_dma_settings_channel_rx(struct SI32_DMADESC_A_Struct *channel
 		 "The SRCAIMD field should be set to 011b for no increment.");
 }
 
-static void assert_dma_settings_channel_tx(struct SI32_DMADESC_A_Struct *channel_descriptor,
-					   struct cipher_pkt *pkt)
+static void assert_dma_settings_channel_tx(struct SI32_DMADESC_A_Struct *channel_descriptor)
 {
+	if (!IS_ENABLED(CONFIG_ASSERT)) {
+		ARG_UNUSED(channel_descriptor);
+	}
+
 	assert_dma_settings_common(channel_descriptor);
 
-	__ASSERT(channel_descriptor->DSTEND.U32 == (uintptr_t)&crypto_si32_config.base->DATAFIFO,
+	__ASSERT(channel_descriptor->DSTEND.U32 == (uintptr_t)&SI32_AES_0->DATAFIFO,
 		 "Destination end pointer set to the DATAFIFO register.");
 	__ASSERT(channel_descriptor->CONFIG.DSTAIMD == 0b11,
 		 "The DSTAIMD field should be set to 011b for no increment.");
@@ -286,12 +267,15 @@ static void assert_dma_settings_channel_tx(struct SI32_DMADESC_A_Struct *channel
 		 "The SRCAIMD field should be set to 010b for word increments.");
 }
 
-static void assert_dma_settings_channel_xor(struct SI32_DMADESC_A_Struct *channel_descriptor,
-					    struct cipher_pkt *pkt)
+static void assert_dma_settings_channel_xor(struct SI32_DMADESC_A_Struct *channel_descriptor)
 {
+	if (!IS_ENABLED(CONFIG_ASSERT)) {
+		ARG_UNUSED(channel_descriptor);
+	}
+
 	assert_dma_settings_common(channel_descriptor);
 
-	__ASSERT(channel_descriptor->DSTEND.U32 == (uintptr_t)&crypto_si32_config.base->XORFIFO,
+	__ASSERT(channel_descriptor->DSTEND.U32 == (uintptr_t)&SI32_AES_0->XORFIFO,
 		 "Destination end pointer set to the XORFIFO register.");
 	__ASSERT(channel_descriptor->CONFIG.DSTAIMD == 0b11,
 		 "The DSTAIMD field should be set to 011b for no increment.");
@@ -324,7 +308,7 @@ static int crypto_si32_dma_setup_tx(struct cipher_pkt *pkt, uint_fast8_t in_buf_
 	dma_block_cfg.block_size = pkt->in_len - in_buf_offset;
 	dma_block_cfg.source_address = (uintptr_t)pkt->in_buf + in_buf_offset;
 	dma_block_cfg.source_addr_adj = 0b00; /* increment */
-	dma_block_cfg.dest_address = (uintptr_t)&crypto_si32_config.base->DATAFIFO;
+	dma_block_cfg.dest_address = (uintptr_t)&SI32_AES_0->DATAFIFO;
 	dma_block_cfg.dest_addr_adj = 0b10; /* no change (no increment) */
 
 	struct dma_config dma_cfg = {
@@ -348,10 +332,8 @@ static int crypto_si32_dma_setup_tx(struct cipher_pkt *pkt, uint_fast8_t in_buf_
 		struct SI32_DMADESC_A_Struct *d =
 			(struct SI32_DMADESC_A_Struct *)SI32_DMACTRL_0->BASEPTR.U32;
 
-		/* As per 12.5.2. General DMA Transfer Setup, check input and output channel
-		 * programming
-		 */
-		assert_dma_settings_channel_tx(d + DMA_CHANNEL_ID_TX, pkt);
+		/* Verify 12.5.2. General DMA Transfer Setup */
+		assert_dma_settings_channel_tx(d + DMA_CHANNEL_ID_TX);
 
 		/* Other checks */
 		__ASSERT(SI32_DMACTRL_A_is_channel_enabled(SI32_DMACTRL_0, DMA_CHANNEL_ID_TX),
@@ -360,9 +342,6 @@ static int crypto_si32_dma_setup_tx(struct cipher_pkt *pkt, uint_fast8_t in_buf_
 
 		__ASSERT(SI32_DMAXBAR_0->DMAXBAR0.CH5SEL == 0b0001,
 			 "0001: Service AES0 TX data requests.");
-
-		__ASSERT(crypto_si32_config.base->CONTROL.RESET == 0,
-			 "Reset done during init, completed by now");
 	}
 
 	ret = dma_start(dma, DMA_CHANNEL_ID_TX);
@@ -399,7 +378,7 @@ static int crypto_si32_dma_setup_rx(struct cipher_pkt *pkt, uint_fast8_t in_buf_
 
 	/* Set up output (RX) DMA channel */
 	dma_block_cfg.block_size = pkt->in_len - in_buf_offset;
-	dma_block_cfg.source_address = (uintptr_t)&crypto_si32_config.base->DATAFIFO;
+	dma_block_cfg.source_address = (uintptr_t)&SI32_AES_0->DATAFIFO;
 	dma_block_cfg.source_addr_adj = 0b10; /* no change */
 	dma_block_cfg.dest_address = (uintptr_t)pkt->out_buf + out_buf_offset;
 	dma_block_cfg.dest_addr_adj = 0b00; /* increment (no increment) */
@@ -437,9 +416,6 @@ static int crypto_si32_dma_setup_rx(struct cipher_pkt *pkt, uint_fast8_t in_buf_
 
 		__ASSERT(SI32_DMAXBAR_0->DMAXBAR0.CH6SEL == 0b0001,
 			 "0001: Service AES0 RX data requests.");
-
-		__ASSERT(crypto_si32_config.base->CONTROL.RESET == 0,
-			 "Reset done during init, completed by now");
 	}
 
 	ret = dma_start(dma, DMA_CHANNEL_ID_RX);
@@ -476,7 +452,7 @@ static int crypto_si32_dma_setup_xor(struct cipher_pkt *pkt)
 	dma_block_cfg.block_size = pkt->in_len;
 	dma_block_cfg.source_address = (uintptr_t)pkt->in_buf;
 	dma_block_cfg.source_addr_adj = 0b00; /* increment */
-	dma_block_cfg.dest_address = (uintptr_t)&crypto_si32_config.base->XORFIFO;
+	dma_block_cfg.dest_address = (uintptr_t)&SI32_AES_0->XORFIFO;
 	dma_block_cfg.dest_addr_adj = 0b10; /* no change (no increment) */
 
 	struct dma_config dma_cfg = {
@@ -503,7 +479,7 @@ static int crypto_si32_dma_setup_xor(struct cipher_pkt *pkt)
 		/* As per 12.5.2. General DMA Transfer Setup, check input and output channel
 		 * programming
 		 */
-		assert_dma_settings_channel_xor(d + DMA_CHANNEL_ID_XOR, pkt);
+		assert_dma_settings_channel_xor(d + DMA_CHANNEL_ID_XOR);
 
 		/* Other checks */
 		__ASSERT(SI32_DMACTRL_A_is_channel_enabled(SI32_DMACTRL_0, DMA_CHANNEL_ID_XOR),
@@ -512,9 +488,6 @@ static int crypto_si32_dma_setup_xor(struct cipher_pkt *pkt)
 
 		__ASSERT(SI32_DMAXBAR_0->DMAXBAR0.CH7SEL == 0b0001,
 			 "0001: Service AES0 XOR data requests.");
-
-		__ASSERT(crypto_si32_config.base->CONTROL.RESET == 0,
-			 "Reset done during init, completed by now");
 	}
 
 	ret = dma_start(dma, DMA_CHANNEL_ID_XOR);
@@ -792,18 +765,20 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		return -ENOSYS;
 	}
 
+	k_mutex_lock(&in_use, K_FOREVER);
+
 	/* 12.8.1./12.8.2. Configuring the DMA for CTR Encryption/Decryption */
 
 	/* DMA Output Channel */
 	ret = crypto_si32_dma_setup_rx(pkt, 0, 0);
 	if (ret) {
-		return ret;
+		goto out_unlock;
 	}
 
 	/* DMA XOR Channel */
 	ret = crypto_si32_dma_setup_xor(pkt);
 	if (ret) {
-		return ret;
+		goto out_unlock;
 	}
 
 	/* Initialization Vector */
@@ -818,7 +793,8 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		break;
 	default:
 		LOG_ERR("Unsupported counter length: %" PRIu16, ctx->mode_params.ctr_info.ctr_len);
-		return -ENOSYS;
+		ret = -ENOSYS;
+		goto out_unlock;
 	}
 
 	/* AES Module */
@@ -830,7 +806,7 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 	 */
 	ret = crypto_si32_aes_set_encryption_key(ctx);
 	if (ret) {
-		return ret;
+		goto out_unlock;
 	}
 
 	/* 3. The CONTROL register should be set as follows: */
@@ -840,7 +816,7 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		/* b. KEYSIZE set to the appropriate number of bits for the key. */
 		ret = crypto_si32_aes_set_keysize(ctx);
 		if (ret) {
-			return ret;
+			goto out_unlock;
 		}
 
 		/* c. EDMD set to 1 for encryption. */
@@ -871,32 +847,60 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 	ret = k_sem_take(&work_done, Z_TIMEOUT_MS(50)); /* TODO: Verify 50 ms */
 	if (ret) {
 		LOG_ERR("AES operation timed out: %d", ret);
-		return -EIO;
+		ret = -EIO;
+		goto out_unlock;
 	}
 
 	pkt->out_len = pkt->in_len;
 
-	return 0;
+out_unlock:
+	k_mutex_unlock(&in_use);
+
+	return ret;
 }
 
 static int crypto_si32_aes_ecb_encrypt(struct cipher_ctx *ctx, struct cipher_pkt *pkt)
 {
-	return crypto_si32_aes_ecb_op(ctx, pkt, CRYPTO_CIPHER_OP_ENCRYPT);
+	int ret;
+
+	k_mutex_lock(&in_use, K_FOREVER);
+	ret = crypto_si32_aes_ecb_op(ctx, pkt, CRYPTO_CIPHER_OP_ENCRYPT);
+	k_mutex_unlock(&in_use);
+
+	return ret;
 }
 
 static int crypto_si32_aes_ecb_decrypt(struct cipher_ctx *ctx, struct cipher_pkt *pkt)
 {
-	return crypto_si32_aes_ecb_op(ctx, pkt, CRYPTO_CIPHER_OP_DECRYPT);
+	int ret;
+
+	k_mutex_lock(&in_use, K_FOREVER);
+	ret = crypto_si32_aes_ecb_op(ctx, pkt, CRYPTO_CIPHER_OP_DECRYPT);
+	k_mutex_unlock(&in_use);
+
+	return ret;
 }
 
 static int crypto_si32_aes_cbc_encrypt(struct cipher_ctx *ctx, struct cipher_pkt *pkt, uint8_t *iv)
 {
-	return crypto_si32_aes_cbc_op(ctx, pkt, CRYPTO_CIPHER_OP_ENCRYPT, iv);
+	int ret;
+
+	k_mutex_lock(&in_use, K_FOREVER);
+	ret = crypto_si32_aes_cbc_op(ctx, pkt, CRYPTO_CIPHER_OP_ENCRYPT, iv);
+	k_mutex_unlock(&in_use);
+
+	return ret;
 }
 
 static int crypto_si32_aes_cbc_decrypt(struct cipher_ctx *ctx, struct cipher_pkt *pkt, uint8_t *iv)
 {
-	return crypto_si32_aes_cbc_op(ctx, pkt, CRYPTO_CIPHER_OP_DECRYPT, iv);
+	int ret;
+
+	k_mutex_lock(&in_use, K_FOREVER);
+	ret = crypto_si32_aes_cbc_op(ctx, pkt, CRYPTO_CIPHER_OP_DECRYPT, iv);
+	k_mutex_unlock(&in_use);
+
+	return ret;
 }
 
 static int crypto_si32_begin_session(const struct device *dev, struct cipher_ctx *ctx,
@@ -918,11 +922,6 @@ static int crypto_si32_begin_session(const struct device *dev, struct cipher_ctx
 	if (ctx->key.bit_stream == NULL) {
 		LOG_ERR("No key provided");
 		return -EINVAL;
-	}
-
-	if (!atomic_cas(&session_in_use, 0, 1)) {
-		LOG_ERR("All session(s) in use");
-		return -EBUSY;
 	}
 
 	switch (op_type) {
@@ -965,8 +964,6 @@ static int crypto_si32_begin_session(const struct device *dev, struct cipher_ctx
 		break;
 	}
 
-	atomic_cas(&session_in_use, 1, 0);
-
 	return -ENOSYS;
 }
 
@@ -975,20 +972,15 @@ static int crypto_si32_free_session(const struct device *dev, struct cipher_ctx 
 	ARG_UNUSED(dev);
 	ARG_UNUSED(ctx);
 
-	if (!atomic_cas(&session_in_use, 1, 0)) {
-		LOG_ERR("Session not in use");
-		return -EINVAL;
-	}
-
 	return 0;
 }
 
 /* AES only, no support for hashing */
 static const struct crypto_driver_api crypto_si32_api = {
+	.query_hw_caps = crypto_si32_query_hw_caps,
 	.cipher_begin_session = crypto_si32_begin_session,
 	.cipher_free_session = crypto_si32_free_session,
-	.query_hw_caps = crypto_si32_query_hw_caps,
 };
 
-DEVICE_DT_INST_DEFINE(0, crypto_si32_init, NULL, NULL, &crypto_si32_config, POST_KERNEL,
+DEVICE_DT_INST_DEFINE(0, crypto_si32_init, NULL, NULL, NULL, POST_KERNEL,
 		      CONFIG_CRYPTO_INIT_PRIORITY, &crypto_si32_api);
