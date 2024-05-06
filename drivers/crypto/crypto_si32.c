@@ -9,8 +9,6 @@
  * Notes:
  *  - If not noted otherwise, chaper numbers refer to the SiM3U1XX/SiM3C1XX reference manual
  *    (SiM3U1xx-SiM3C1xx-RM.pdf, revision 1.0)
- *  - Session handling not implemented. Would be needed to support encryption of CTR messages
- *    splitted over multiple calls.
  *  - Each DMA channels has one word of unused data (=> 3 x 4 = 12 bytes of unused RAM)
  */
 
@@ -157,23 +155,23 @@ static int crypto_si32_init(const struct device *dev)
 	return 0;
 }
 
-static int crypto_si32_aes_set_encryption_key(const struct cipher_ctx *ctx)
+static int crypto_si32_aes_set_key(const uint8_t *key, uint8_t key_len)
 {
-	switch (ctx->keylen) {
+	switch (key_len) {
 	case 32:
-		SI32_AES_0->HWKEY7.U32 = *((uint32_t *)ctx->key.bit_stream + 7);
-		SI32_AES_0->HWKEY6.U32 = *((uint32_t *)ctx->key.bit_stream + 6);
+		SI32_AES_0->HWKEY7.U32 = *((uint32_t *)key + 7);
+		SI32_AES_0->HWKEY6.U32 = *((uint32_t *)key + 6);
 	case 24:
-		SI32_AES_0->HWKEY5.U32 = *((uint32_t *)ctx->key.bit_stream + 5);
-		SI32_AES_0->HWKEY4.U32 = *((uint32_t *)ctx->key.bit_stream + 4);
+		SI32_AES_0->HWKEY5.U32 = *((uint32_t *)key + 5);
+		SI32_AES_0->HWKEY4.U32 = *((uint32_t *)key + 4);
 	case 16:
-		SI32_AES_0->HWKEY3.U32 = *((uint32_t *)ctx->key.bit_stream + 3);
-		SI32_AES_0->HWKEY2.U32 = *((uint32_t *)ctx->key.bit_stream + 2);
-		SI32_AES_0->HWKEY1.U32 = *((uint32_t *)ctx->key.bit_stream + 1);
-		SI32_AES_0->HWKEY0.U32 = *((uint32_t *)ctx->key.bit_stream);
+		SI32_AES_0->HWKEY3.U32 = *((uint32_t *)key + 3);
+		SI32_AES_0->HWKEY2.U32 = *((uint32_t *)key + 2);
+		SI32_AES_0->HWKEY1.U32 = *((uint32_t *)key + 1);
+		SI32_AES_0->HWKEY0.U32 = *((uint32_t *)key);
 		break;
 	default:
-		LOG_ERR("Invalid key len: %" PRIu16, ctx->keylen);
+		LOG_ERR("Invalid key len: %" PRIu16, key_len);
 		return -EINVAL;
 	}
 
@@ -185,7 +183,7 @@ static int crypto_si32_aes_calc_decryption_key(const struct cipher_ctx *ctx,
 {
 	int ret;
 
-	ret = crypto_si32_aes_set_encryption_key(ctx);
+	ret = crypto_si32_aes_set_key(ctx->key.bit_stream, ctx->keylen);
 	if (ret) {
 		return ret;
 	}
@@ -237,46 +235,7 @@ static int crypto_si32_aes_calc_decryption_key(const struct cipher_ctx *ctx,
 	return 0;
 }
 
-/* Measured as of 2024-05-03, this takes ~600 cycles to complete (with logging disabled) */
-static int crypto_si32_aes_set_decryption_key(const struct cipher_ctx *ctx)
-{
-	int ret;
-
-	ret = crypto_si32_aes_set_encryption_key(ctx);
-	if (ret) {
-		return ret;
-	}
-
-	LOG_INF("Generating decryption key");
-	/* TODO: How much of this can be removed? */
-	SI32_AES_A_write_xfrsize(SI32_AES_0, 0);
-	SI32_AES_A_enable_error_interrupt(SI32_AES_0);
-	SI32_AES_A_exit_cipher_block_chaining_mode(SI32_AES_0);
-	SI32_AES_A_exit_counter_mode(SI32_AES_0);
-	SI32_AES_A_select_xor_path_none(SI32_AES_0);
-	SI32_AES_A_exit_bypass_hardware_mode(SI32_AES_0);
-	SI32_AES_A_enable_key_capture(SI32_AES_0);
-	SI32_AES_A_select_software_mode(SI32_AES_0);
-	SI32_AES_A_select_encryption_mode(SI32_AES_0);
-
-	for (int_fast8_t i = 0; i < 4; i++) {
-		SI32_AES_A_write_datafifo(SI32_AES_0, 0x00000000);
-	}
-
-	SI32_AES_A_clear_operation_complete_interrupt(SI32_AES_0);
-	SI32_AES_A_start_operation(SI32_AES_0);
-	while (!SI32_AES_A_is_operation_complete_interrupt_pending(SI32_AES_0)) {
-		/* This should not take long */
-	}
-
-	for (int_fast8_t i = 0; i < 4; i++) {
-		SI32_AES_A_read_datafifo(SI32_AES_0);
-	}
-
-	return 0;
-}
-
-static int crypto_si32_aes_set_keysize(const struct cipher_ctx *ctx)
+static int crypto_si32_aes_set_key_size(const struct cipher_ctx *ctx)
 {
 	switch (ctx->keylen) {
 	case 32:
@@ -577,6 +536,7 @@ static int crypto_si32_dma_setup_xor(struct cipher_pkt *pkt)
 
 static int crypto_si32_aes_ecb_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt, enum cipher_op op)
 {
+	struct session *session = (struct session *)ctx->drv_sessn_state;
 	int ret;
 
 	if (!ctx) {
@@ -612,7 +572,7 @@ static int crypto_si32_aes_ecb_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 	case CRYPTO_CIPHER_OP_ENCRYPT:
 		/* 2. The HWKEYx registers should be written with the desired key in little endian
 		 * format */
-		ret = crypto_si32_aes_set_encryption_key(ctx);
+		ret = crypto_si32_aes_set_key(ctx->key.bit_stream, ctx->keylen);
 		if (ret) {
 			return ret;
 		}
@@ -621,7 +581,7 @@ static int crypto_si32_aes_ecb_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		/* 2. The HWKEYx registers should be written with decryption key value
 		 * (automatically generated in the HWKEYx registers after the encryption process).
 		 */
-		ret = crypto_si32_aes_set_decryption_key(ctx);
+		ret = crypto_si32_aes_set_key(session->decryption_key, ctx->keylen);
 		if (ret) {
 			return ret;
 		}
@@ -633,7 +593,7 @@ static int crypto_si32_aes_ecb_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		__ASSERT(SI32_AES_0->CONTROL.ERRIEN == 1, "a. ERRIEN set to 1.");
 
 		/* KEYSIZE set to the appropriate number of bits for the key. */
-		ret = crypto_si32_aes_set_keysize(ctx);
+		ret = crypto_si32_aes_set_key_size(ctx);
 		if (ret) {
 			return ret;
 		}
@@ -681,7 +641,7 @@ static int crypto_si32_aes_ecb_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 static int crypto_si32_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt, enum cipher_op op,
 				  const uint8_t iv[16])
 {
-	struct session *session = (struct session *)ctx->drv_sessn_state;
+	struct session *session;
 	int ret;
 	uint_fast8_t in_buf_offset = 0;
 	uint_fast8_t out_buf_offset = 0;
@@ -690,6 +650,8 @@ static int crypto_si32_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		LOG_WRN("Missing context");
 		return -EINVAL;
 	}
+
+	session = (struct session *)ctx->drv_sessn_state;
 
 	if (!pkt) {
 		LOG_WRN("Missing packet");
@@ -733,16 +695,16 @@ static int crypto_si32_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 	SI32_AES_0->HWCTR2.U32 = *((uint32_t *)iv + 2);
 	SI32_AES_0->HWCTR3.U32 = *((uint32_t *)iv + 3);
 
-	/* AES Module
-	 *
-	 * Note: Step #1 and #2 swapped because the 2nd one overwrites the xfrsize written by #1.
-	 */
+	/* AES Module */
+
+	/* 1. The XFRSIZE register should be set to N-1, where N is the number of 4-word blocks. */
+	SI32_AES_A_write_xfrsize(SI32_AES_0, (pkt->in_len - in_buf_offset) / AES_BLOCK_SIZE - 1);
 
 	switch (op) {
 	case CRYPTO_CIPHER_OP_ENCRYPT:
 		/* 2. The HWKEYx registers should be written with the desired key in little endian
 		 * format. */
-		ret = crypto_si32_aes_set_encryption_key(ctx);
+		ret = crypto_si32_aes_set_key(ctx->key.bit_stream, ctx->keylen);
 		if (ret) {
 			return ret;
 		}
@@ -751,22 +713,19 @@ static int crypto_si32_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		/* 2. The HWKEYx registers should be written with decryption key value
 		 * (automatically generated in the HWKEYx registers after the encryption process).
 		 */
-		ret = crypto_si32_aes_set_decryption_key(ctx);
+		ret = crypto_si32_aes_set_key(session->decryption_key, ctx->keylen);
 		if (ret) {
 			return ret;
 		}
 		break;
 	}
 
-	/* 1. The XFRSIZE register should be set to N-1, where N is the number of 4-word blocks. */
-	SI32_AES_A_write_xfrsize(SI32_AES_0, (pkt->in_len - in_buf_offset) / AES_BLOCK_SIZE - 1);
-
 	/* 3. The CONTROL register should be set as follows: */
 	{
 		__ASSERT(SI32_AES_0->CONTROL.ERRIEN == 1, "a. ERRIEN set to 1.");
 
 		/* b. KEYSIZE set to the appropriate number of bits for the key. */
-		ret = crypto_si32_aes_set_keysize(ctx);
+		ret = crypto_si32_aes_set_key_size(ctx);
 		if (ret) {
 			return ret;
 		}
@@ -825,12 +784,15 @@ static int crypto_si32_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 
 static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt, uint8_t iv[12])
 {
+	struct session *session;
 	int ret;
 
 	if (!ctx) {
 		LOG_WRN("Missing context");
 		return -EINVAL;
 	}
+
+	session = (struct session *)ctx->drv_sessn_state;
 
 	if (!pkt) {
 		LOG_WRN("Missing packet");
@@ -863,7 +825,7 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 	/* The initialization vector should be initialized to the HWCTRx registers. */
 	switch (ctx->mode_params.ctr_info.ctr_len) {
 	case 32:
-		SI32_AES_0->HWCTR3.U32 = 0; /* TODO: Implement caching within session. */
+		SI32_AES_0->HWCTR3.U32 = session->current_ctr;
 		SI32_AES_0->HWCTR2.U32 = *((uint32_t *)iv + 2);
 		SI32_AES_0->HWCTR1.U32 = *((uint32_t *)iv + 1);
 		SI32_AES_0->HWCTR0.U32 = *((uint32_t *)iv);
@@ -881,7 +843,7 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 
 	/* 2. The HWKEYx registers should be written with the desired key in little endian format.
 	 */
-	ret = crypto_si32_aes_set_encryption_key(ctx);
+	ret = crypto_si32_aes_set_key(ctx->key.bit_stream, ctx->keylen);
 	if (ret) {
 		goto out_unlock;
 	}
@@ -891,7 +853,7 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 		__ASSERT(SI32_AES_0->CONTROL.ERRIEN == 1, "a. ERRIEN set to 1.");
 
 		/* b. KEYSIZE set to the appropriate number of bits for the key. */
-		ret = crypto_si32_aes_set_keysize(ctx);
+		ret = crypto_si32_aes_set_key_size(ctx);
 		if (ret) {
 			goto out_unlock;
 		}
@@ -925,6 +887,17 @@ static int crypto_si32_aes_ctr_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 	if (ret) {
 		LOG_ERR("AES operation timed out: %d", ret);
 		ret = -EIO;
+		goto out_unlock;
+	}
+
+	/* Update session with new counter value */
+	switch (ctx->mode_params.ctr_info.ctr_len) {
+	case 32:
+		session->current_ctr = SI32_AES_0->HWCTR3.U32;
+		break;
+	default:
+		LOG_ERR("Unsupported counter length: %" PRIu16, ctx->mode_params.ctr_info.ctr_len);
+		ret = -ENOSYS;
 		goto out_unlock;
 	}
 
@@ -984,7 +957,7 @@ static int crypto_si32_begin_session(const struct device *dev, struct cipher_ctx
 				     const enum cipher_algo algo, const enum cipher_mode mode,
 				     const enum cipher_op op_type)
 {
-	int ret;
+	int ret = 0;
 	struct session *session = 0;
 
 	if (algo != CRYPTO_CIPHER_ALGO_AES) {
@@ -1025,16 +998,13 @@ static int crypto_si32_begin_session(const struct device *dev, struct cipher_ctx
 		switch (mode) {
 		case CRYPTO_CIPHER_MODE_ECB:
 			ctx->ops.block_crypt_hndlr = crypto_si32_aes_ecb_encrypt;
-			ret = 0;
 			break;
 		case CRYPTO_CIPHER_MODE_CBC:
 			ctx->ops.cbc_crypt_hndlr = crypto_si32_aes_cbc_encrypt;
-			ret = 0;
 			break;
 		case CRYPTO_CIPHER_MODE_CTR:
 			ctx->ops.ctr_crypt_hndlr = crypto_si32_aes_ctr_op;
 			session->current_ctr = 0;
-			ret = 0;
 			break;
 		case CRYPTO_CIPHER_MODE_CCM:
 		case CRYPTO_CIPHER_MODE_GCM:
@@ -1062,7 +1032,6 @@ static int crypto_si32_begin_session(const struct device *dev, struct cipher_ctx
 		case CRYPTO_CIPHER_MODE_CTR:
 			ctx->ops.ctr_crypt_hndlr = crypto_si32_aes_ctr_op;
 			session->current_ctr = 0;
-			ret = 0;
 			break;
 		case CRYPTO_CIPHER_MODE_CCM:
 		case CRYPTO_CIPHER_MODE_GCM:
@@ -1089,7 +1058,11 @@ out:
 static int crypto_si32_free_session(const struct device *dev, struct cipher_ctx *ctx)
 {
 	ARG_UNUSED(dev);
-	ARG_UNUSED(ctx);
+
+	if (!ctx) {
+		LOG_WRN("Missing context");
+		return -EINVAL;
+	}
 
 	struct session *session = (struct session *)ctx->drv_sessn_state;
 
