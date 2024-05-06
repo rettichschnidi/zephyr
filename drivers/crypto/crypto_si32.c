@@ -11,6 +11,7 @@
  *    (SiM3U1xx-SiM3C1xx-RM.pdf, revision 1.0)
  *  - Session handling not implemented. Would be needed to support encryption of CTR messages
  *    splitted over multiple calls.
+ *  - Each DMA channels has one word of unused data (=> 3 x 4 = 12 bytes of unused RAM)
  */
 
 #define DT_DRV_COMPAT silabs_si32_aes
@@ -47,8 +48,24 @@ BUILD_ASSERT(DMA_CHANNEL_ID_RX < DMA_CHANNEL_COUNT, "Too few DMA channels");
 BUILD_ASSERT(DMA_CHANNEL_ID_TX < DMA_CHANNEL_COUNT, "Too few DMA channels");
 BUILD_ASSERT(DMA_CHANNEL_ID_XOR < DMA_CHANNEL_COUNT, "Too few DMA channels");
 
+struct session {
+	/* Decryption key needed only by ECB and CBC, and counter only by CTR. */
+	union {
+		uint8_t decryption_key[32]; /* only used for decryption sessions */
+		uint32_t current_ctr;       /* only used for AES-CTR sessions */
+	};
+
+	bool in_use;
+};
+
+struct crypto_si32_data {
+	struct session sessions[CONFIG_CRYPTO_SI32_MAX_SESSION];
+};
+
 K_MUTEX_DEFINE(crypto_si32_in_use);
 K_SEM_DEFINE(crypto_si32_work_done, 0, 1);
+
+struct crypto_si32_data crypto_si32_data;
 
 static void crypto_si32_dma_completed(const struct device *dev, void *user_data, uint32_t channel,
 				      int status)
@@ -154,6 +171,63 @@ static int crypto_si32_aes_set_encryption_key(const struct cipher_ctx *ctx)
 		SI32_AES_0->HWKEY2.U32 = *((uint32_t *)ctx->key.bit_stream + 2);
 		SI32_AES_0->HWKEY1.U32 = *((uint32_t *)ctx->key.bit_stream + 1);
 		SI32_AES_0->HWKEY0.U32 = *((uint32_t *)ctx->key.bit_stream);
+		break;
+	default:
+		LOG_ERR("Invalid key len: %" PRIu16, ctx->keylen);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int crypto_si32_aes_calc_decryption_key(const struct cipher_ctx *ctx,
+					       uint8_t *decryption_key)
+{
+	int ret;
+
+	ret = crypto_si32_aes_set_encryption_key(ctx);
+	if (ret) {
+		return ret;
+	}
+
+	LOG_INF("Generating decryption key");
+	/* TODO: How much of this can be removed? */
+	SI32_AES_A_write_xfrsize(SI32_AES_0, 0);
+	SI32_AES_A_enable_error_interrupt(SI32_AES_0);
+	SI32_AES_A_exit_cipher_block_chaining_mode(SI32_AES_0);
+	SI32_AES_A_exit_counter_mode(SI32_AES_0);
+	SI32_AES_A_exit_bypass_hardware_mode(SI32_AES_0);
+	SI32_AES_A_select_xor_path_none(SI32_AES_0);
+	SI32_AES_A_select_software_mode(SI32_AES_0);
+	SI32_AES_A_select_encryption_mode(SI32_AES_0);
+	SI32_AES_A_enable_key_capture(SI32_AES_0);
+
+	for (int_fast8_t i = 0; i < 4; i++) {
+		SI32_AES_A_write_datafifo(SI32_AES_0, 0x00000000);
+	}
+
+	SI32_AES_A_clear_operation_complete_interrupt(SI32_AES_0);
+	SI32_AES_A_start_operation(SI32_AES_0);
+	while (!SI32_AES_A_is_operation_complete_interrupt_pending(SI32_AES_0)) {
+		/* This should not take long */
+	}
+
+	for (int_fast8_t i = 0; i < 4; i++) {
+		SI32_AES_A_read_datafifo(SI32_AES_0);
+	}
+
+	switch (ctx->keylen) {
+	case 32:
+		*((uint32_t *)decryption_key + 7) = SI32_AES_0->HWKEY7.U32;
+		*((uint32_t *)decryption_key + 6) = SI32_AES_0->HWKEY6.U32;
+	case 24:
+		*((uint32_t *)decryption_key + 5) = SI32_AES_0->HWKEY5.U32;
+		*((uint32_t *)decryption_key + 4) = SI32_AES_0->HWKEY4.U32;
+	case 16:
+		*((uint32_t *)decryption_key + 3) = SI32_AES_0->HWKEY3.U32;
+		*((uint32_t *)decryption_key + 2) = SI32_AES_0->HWKEY2.U32;
+		*((uint32_t *)decryption_key + 1) = SI32_AES_0->HWKEY1.U32;
+		*((uint32_t *)decryption_key) = SI32_AES_0->HWKEY0.U32;
 		break;
 	default:
 		LOG_ERR("Invalid key len: %" PRIu16, ctx->keylen);
@@ -607,6 +681,7 @@ static int crypto_si32_aes_ecb_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt
 static int crypto_si32_aes_cbc_op(struct cipher_ctx *ctx, struct cipher_pkt *pkt, enum cipher_op op,
 				  const uint8_t iv[16])
 {
+	struct session *session = (struct session *)ctx->drv_sessn_state;
 	int ret;
 	uint_fast8_t in_buf_offset = 0;
 	uint_fast8_t out_buf_offset = 0;
@@ -909,7 +984,8 @@ static int crypto_si32_begin_session(const struct device *dev, struct cipher_ctx
 				     const enum cipher_algo algo, const enum cipher_mode mode,
 				     const enum cipher_op op_type)
 {
-	ARG_UNUSED(dev);
+	int ret;
+	struct session *session = 0;
 
 	if (algo != CRYPTO_CIPHER_ALGO_AES) {
 		LOG_ERR("This driver supports only AES");
@@ -926,53 +1002,100 @@ static int crypto_si32_begin_session(const struct device *dev, struct cipher_ctx
 		return -EINVAL;
 	}
 
+	k_mutex_lock(&crypto_si32_in_use, K_FOREVER);
+
+	for (uint_fast8_t i = 0; i < ARRAY_SIZE(crypto_si32_data.sessions); i++) {
+		if (crypto_si32_data.sessions[i].in_use) {
+			continue;
+		}
+
+		LOG_INF("Session %" PRIuFAST8 " is available", i);
+		session = &crypto_si32_data.sessions[i];
+		break;
+	}
+
+	if (!session) {
+		LOG_INF("All %d session(s) in use", CONFIG_CRYPTO_SI32_MAX_SESSION);
+		ret = -ENOSPC;
+		goto out;
+	}
+
 	switch (op_type) {
 	case CRYPTO_CIPHER_OP_ENCRYPT:
 		switch (mode) {
 		case CRYPTO_CIPHER_MODE_ECB:
 			ctx->ops.block_crypt_hndlr = crypto_si32_aes_ecb_encrypt;
-			return 0;
+			ret = 0;
+			break;
 		case CRYPTO_CIPHER_MODE_CBC:
 			ctx->ops.cbc_crypt_hndlr = crypto_si32_aes_cbc_encrypt;
-			return 0;
+			ret = 0;
+			break;
 		case CRYPTO_CIPHER_MODE_CTR:
 			ctx->ops.ctr_crypt_hndlr = crypto_si32_aes_ctr_op;
-			return 0;
+			session->current_ctr = 0;
+			ret = 0;
+			break;
 		case CRYPTO_CIPHER_MODE_CCM:
 		case CRYPTO_CIPHER_MODE_GCM:
 			LOG_ERR("Unsupported encryption mode: %d", mode);
-			break;
+			ret = -ENOSYS;
+			goto out;
 		}
 		break;
 	case CRYPTO_CIPHER_OP_DECRYPT:
 		switch (mode) {
 		case CRYPTO_CIPHER_MODE_ECB:
 			ctx->ops.block_crypt_hndlr = crypto_si32_aes_ecb_decrypt;
-			return 0;
+			ret = crypto_si32_aes_calc_decryption_key(ctx, session->decryption_key);
+			if (ret) {
+				goto out;
+			}
+			break;
 		case CRYPTO_CIPHER_MODE_CBC:
 			ctx->ops.cbc_crypt_hndlr = crypto_si32_aes_cbc_decrypt;
-			return 0;
+			ret = crypto_si32_aes_calc_decryption_key(ctx, session->decryption_key);
+			if (ret) {
+				goto out;
+			}
+			break;
 		case CRYPTO_CIPHER_MODE_CTR:
 			ctx->ops.ctr_crypt_hndlr = crypto_si32_aes_ctr_op;
-			return 0;
+			session->current_ctr = 0;
+			ret = 0;
+			break;
 		case CRYPTO_CIPHER_MODE_CCM:
 		case CRYPTO_CIPHER_MODE_GCM:
 			LOG_ERR("Unsupported decryption mode: %d", mode);
-			break;
+			ret = -ENOSYS;
+			goto out;
 		}
 		break;
 	default:
 		LOG_ERR("Unsupported op type: %d", op_type);
-		break;
+		ret = -ENOSYS;
+		goto out;
 	}
 
-	return -ENOSYS;
+	session->in_use = true;
+	ctx->drv_sessn_state = session;
+
+out:
+	k_mutex_unlock(&crypto_si32_in_use);
+
+	return ret;
 }
 
 static int crypto_si32_free_session(const struct device *dev, struct cipher_ctx *ctx)
 {
 	ARG_UNUSED(dev);
 	ARG_UNUSED(ctx);
+
+	struct session *session = (struct session *)ctx->drv_sessn_state;
+
+	k_mutex_lock(&crypto_si32_in_use, K_FOREVER);
+	session->in_use = false;
+	k_mutex_unlock(&crypto_si32_in_use);
 
 	return 0;
 }
