@@ -93,7 +93,8 @@ static int crypto_si32_query_hw_caps(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	return (CAP_RAW_KEY | CAP_SEPARATE_IO_BUFS | CAP_INPLACE_OPS | CAP_SYNC_OPS);
+	return (CAP_RAW_KEY | CAP_SEPARATE_IO_BUFS | CAP_INPLACE_OPS | CAP_SYNC_OPS |
+		CAP_NO_IV_PREFIX);
 }
 
 static void crypto_si32_irq_error_handler(const struct device *dev)
