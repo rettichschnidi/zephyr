@@ -144,7 +144,6 @@ ZTEST_F(crypto_cbc, test_encrypt_inplace_ops)
 		.in_buf =
 			(uint8_t *)fixture->scratchpad, /* out in dedicated memory, won't modify */
 		.in_len = fixture->plaintext_len,
-		.out_buf_max = 0,
 		.out_buf = NULL,
 	};
 
