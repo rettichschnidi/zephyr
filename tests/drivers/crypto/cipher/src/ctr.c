@@ -132,4 +132,31 @@ ZTEST_F(crypto_ctr, test_separate_io_bufs)
 	zassert_mem_equal(fixture->scratchpad, fixture->ciphertext, fixture->ciphertext_len);
 }
 
+ZTEST_F(crypto_ctr, test_inplace_ops)
+{
+	const int flags = crypto_query_hwcaps(fixture->dev);
+
+	if ((flags & CAP_INPLACE_OPS) == 0U) {
+		ztest_test_skip();
+	}
+
+	fixture->ctx.flags |= CAP_SYNC_OPS | CAP_INPLACE_OPS;
+	zassert_ok(cipher_begin_session(fixture->dev, &fixture->ctx, CRYPTO_CIPHER_ALGO_AES,
+					CRYPTO_CIPHER_MODE_CTR, CRYPTO_CIPHER_OP_ENCRYPT),
+		   "Session initialization must succeed");
+	fixture->ctx_free_in_teardown = true;
+
+	struct cipher_pkt pkt = {
+		.in_buf = fixture->scratchpad,
+		.in_len = fixture->plaintext_len,
+		.out_buf = NULL,
+	};
+
+	memcpy(fixture->scratchpad, fixture->plaintext, fixture->scratchpad_len);
+
+	zassert_ok(cipher_ctr_op(&fixture->ctx, &pkt, fixture->nonce), "Encryption must succeed");
+	zassert_equal((size_t)pkt.out_len, fixture->plaintext_len, "Output has same size as input");
+	zassert_mem_equal(fixture->scratchpad, fixture->ciphertext, fixture->ciphertext_len);
+}
+
 ZTEST_SUITE(crypto_ctr, NULL, crypto_ctr_setup, crypto_ctr_before, crypto_ctr_after, NULL);
