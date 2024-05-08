@@ -460,15 +460,20 @@ static int mtls_session_free(const struct device *dev, struct cipher_ctx *ctx)
 	struct mtls_shim_session *mtls_session =
 		(struct mtls_shim_session *)ctx->drv_sessn_state;
 
-	if (IS_ENABLED(CONFIG_MBEDTLS_CIPHER_CCM_ENABLED) &&
-	    mtls_session->mode == CRYPTO_CIPHER_MODE_CCM) {
+	switch (mtls_session->mode) {
+#ifdef CONFIG_MBEDTLS_CIPHER_CCM_ENABLED
+	case CRYPTO_CIPHER_MODE_CCM:
 		mbedtls_ccm_free(&mtls_session->mtls_ccm);
-#ifdef CONFIG_MBEDTLS_CIPHER_GCM_ENABLED
-	} else if (mtls_session->mode == CRYPTO_CIPHER_MODE_GCM) {
-		mbedtls_gcm_free(&mtls_session->mtls_gcm);
+		break;
 #endif
-	} else {
+#ifdef CONFIG_MBEDTLS_CIPHER_GCM_ENABLED
+		case CRYPTO_CIPHER_MODE_GCM:
+		mbedtls_gcm_free(&mtls_session->mtls_gcm);
+		break;
+#endif
+	default:
 		mbedtls_aes_free(&mtls_session->mtls_aes);
+		break;
 	}
 	mtls_session->in_use = false;
 
