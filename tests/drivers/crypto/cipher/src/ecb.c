@@ -154,7 +154,6 @@ ZTEST_F(crypto_ecb, test_encrypt_inplace_ops)
 	struct cipher_pkt pkt = {
 		.in_buf = buf,
 		.in_len = AES_BLOCK_SIZE_BYTES,
-		.out_buf_max = 0,
 		.out_buf = NULL,
 	};
 	memcpy(buf, fixture->plaintext, sizeof(buf));
@@ -180,7 +179,6 @@ ZTEST_F(crypto_ecb, test_decrypt_inplace_ops)
 	struct cipher_pkt pkt = {
 		.in_buf = buf,
 		.in_len = AES_BLOCK_SIZE_BYTES,
-		.out_buf_max = 0,
 		.out_buf = NULL,
 	};
 	memcpy(buf, fixture->ciphertext, sizeof(buf));
