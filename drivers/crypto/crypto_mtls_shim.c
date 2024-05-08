@@ -20,7 +20,9 @@
 #include CONFIG_MBEDTLS_CFG_FILE
 #endif /* CONFIG_MBEDTLS_CFG_FILE */
 
+#ifdef CONFIG_MBEDTLS_CIPHER_CCM_ENABLED
 #include <mbedtls/ccm.h>
+#endif
 #ifdef CONFIG_MBEDTLS_CIPHER_GCM_ENABLED
 #include <mbedtls/gcm.h>
 #endif
@@ -38,7 +40,9 @@ LOG_MODULE_REGISTER(mbedtls);
 
 struct mtls_shim_session {
 	union {
+#ifdef CONFIG_MBEDTLS_CIPHER_CCM_ENABLED
 		mbedtls_ccm_context mtls_ccm;
+#endif
 #ifdef CONFIG_MBEDTLS_CIPHER_GCM_ENABLED
 		mbedtls_gcm_context mtls_gcm;
 #endif
@@ -338,8 +342,10 @@ static int mtls_session_setup(const struct device *dev,
 		return -EINVAL;
 	}
 
-	if (mode != CRYPTO_CIPHER_MODE_CCM &&
-	    mode != CRYPTO_CIPHER_MODE_CBC &&
+	if (mode != CRYPTO_CIPHER_MODE_CBC &&
+#ifdef CONFIG_MBEDTLS_CIPHER_GCM_ENABLED
+	    mode != CRYPTO_CIPHER_MODE_CCM &&
+#endif
 #ifdef CONFIG_MBEDTLS_CIPHER_GCM_ENABLED
 	    mode != CRYPTO_CIPHER_MODE_GCM &&
 #endif
