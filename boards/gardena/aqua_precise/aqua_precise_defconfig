@@ -11,3 +11,7 @@ CONFIG_SHELL=y
 # Needed for many peripherals, including the user button
 CONFIG_GPIO=y
 CONFIG_GPIO_SHELL=y
+
+# I2C is needed for the LED drivers
+CONFIG_I2C=y
+CONFIG_I2C_SHELL=y
