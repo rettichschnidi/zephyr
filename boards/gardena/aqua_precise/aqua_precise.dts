@@ -95,7 +95,8 @@
 		led_power { /* hardware wiring is wrong, messes up the drivers logic */
 			label = "LED Power";
 			index = <0>;
-			color-mapping = <LED_COLOR_ID_RED     /* OUT1 */
+			color-mapping = <LED_COLOR_ID_SKIP    /* OUT0 - used by BLE LED! */
+			                 LED_COLOR_ID_RED     /* OUT1 */
 			                 LED_COLOR_ID_GREEN>; /* OUT2 */
 		};
 		led_watering {

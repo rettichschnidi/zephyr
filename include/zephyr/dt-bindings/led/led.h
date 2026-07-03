@@ -15,6 +15,8 @@
 #define LED_COLOR_ID_VIOLET     5
 #define LED_COLOR_ID_YELLOW     6
 #define LED_COLOR_ID_IR         7
-#define LED_COLOR_ID_MAX        8
+#define LED_COLOR_ID_SKIP       8 /* This LED does not exist */
+#define LED_COLOR_ID_MAX        9
+
 
 #endif /* ZEPHYR_INCLUDE_DT_BINDINGS_LED_LED_H_ */
