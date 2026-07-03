@@ -15,3 +15,7 @@ CONFIG_GPIO_SHELL=y
 # I2C is needed for the LED drivers
 CONFIG_I2C=y
 CONFIG_I2C_SHELL=y
+
+# HMI LEDs use the LED subsystem
+CONFIG_LED=y
+CONFIG_LED_SHELL=y
