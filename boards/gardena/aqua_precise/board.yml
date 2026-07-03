@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Reto Schneider
+#
+# SPDX-License-Identifier: Apache-2.0
+
+board:
+  name: aqua_precise
+  full_name: AquaPrecise
+  vendor: gardena
+  socs:
+    - name: nrf52840

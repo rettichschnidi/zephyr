@@ -1,0 +1,13 @@
+# Copyright (c) 2026 Reto Schneider
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Enable serial instead of UART ACM because serial is usable early on
+CONFIG_SERIAL=y
+
+# Shell is THE way to interact with the hardware during development
+CONFIG_SHELL=y
+
+# Needed for many peripherals, including the user button
+CONFIG_GPIO=y
+CONFIG_GPIO_SHELL=y
