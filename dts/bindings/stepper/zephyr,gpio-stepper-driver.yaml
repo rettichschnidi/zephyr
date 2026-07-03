@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Reto Schneider
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Plain GPIO stepper hardware driver.
+
+  Used to enable/disable a stepper motor power stage (e.g. a darlington transistor array or
+  H-bridge) that has no dedicated driver IC and is instead controlled directly via GPIOs by a
+  motion controller such as zephyr,h-bridge-stepper-ctrl.
+
+compatible: "zephyr,gpio-stepper-driver"
+
+include: stepper-driver.yaml
+
+properties:
+  en-gpios:
+    required: true
+
+examples:
+  - |
+    gpio_stepper_driver: gpio-stepper-driver {
+        compatible = "zephyr,gpio-stepper-driver";
+        en-gpios = <&gpioa 6 GPIO_ACTIVE_HIGH>;
+    };

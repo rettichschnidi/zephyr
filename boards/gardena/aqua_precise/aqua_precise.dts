@@ -32,9 +32,29 @@
 		};
 	};
 
+	stepper_driver: stepper_driver {
+		compatible = "zephyr,gpio-stepper-driver";
+		status = "okay";
+
+		en-gpios = <&gpio0 8 (GPIO_ACTIVE_HIGH)>;
+	};
+
+	h_bridge_stepper: h_bridge_stepper {
+		compatible = "zephyr,h-bridge-stepper-ctrl";
+		lut-step-gap = <1>;
+		status = "okay";
+
+		gpios = <&gpio0 20 (GPIO_ACTIVE_HIGH)>, /* Lead A1/A */
+		        <&gpio0 25 (GPIO_ACTIVE_HIGH)>, /* Lead B1/B */
+		        <&gpio0 21 (GPIO_ACTIVE_HIGH)>, /* Lead A2/C */
+		        <&gpio0 11 (GPIO_ACTIVE_HIGH)>; /* Lead B2/D */
+	};
+
 	/* These aliases are provided for compatibility with samples */
 	aliases {
 		sw0 = &button0;
+		stepper-driver = &stepper_driver;
+		stepper-ctrl = &h_bridge_stepper;
 		watchdog0 = &wdt0;
 	};
 };

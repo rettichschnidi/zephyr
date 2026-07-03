@@ -5,4 +5,5 @@ comment "GPIO Stepper Controllers"
 
 rsource "common/Kconfig"
 rsource "Kconfig.gpio_step_dir"
+rsource "Kconfig.gpio_stepper_driver"
 rsource "Kconfig.h_bridge"

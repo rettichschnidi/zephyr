@@ -6,5 +6,6 @@ zephyr_library_property(ALLOW_EMPTY TRUE)
 
 zephyr_library_sources_ifdef(CONFIG_STEPPER_H_BRIDGE_STEPPER_CTRL h_bridge_stepper_ctrl.c)
 zephyr_library_sources_ifdef(CONFIG_STEPPER_GPIO_STEP_DIR_STEPPER_CTRL gpio_step_dir_stepper_ctrl.c)
+zephyr_library_sources_ifdef(CONFIG_STEPPER_GPIO_STEPPER_DRIVER gpio_stepper_driver.c)
 
 add_subdirectory_ifdef(CONFIG_GPIO_STEPPER common)

@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 Reto Schneider
+# SPDX-License-Identifier: Apache-2.0
+
+config STEPPER_GPIO_STEPPER_DRIVER
+	bool "Activate driver for plain GPIO stepper enable/disable"
+	depends on DT_HAS_ZEPHYR_GPIO_STEPPER_DRIVER_ENABLED
+	default y

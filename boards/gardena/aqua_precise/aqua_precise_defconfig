@@ -19,3 +19,7 @@ CONFIG_I2C_SHELL=y
 # HMI LEDs use the LED subsystem
 CONFIG_LED=y
 CONFIG_LED_SHELL=y
+
+# Controlling the motor
+CONFIG_STEPPER=y
+CONFIG_STEPPER_SHELL=y
