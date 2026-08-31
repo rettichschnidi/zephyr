@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Siemens
+# SPDX-License-Identifier: Apache-2.0
+
+config ST77916
+	bool "ST77916 display driver"
+	default y
+	depends on DT_HAS_SITRONIX_ST77916_ENABLED
+	select MIPI_DBI
+	help
+	  Enable driver for ST77916 display controller.
